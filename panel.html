@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+
+    <head>
+
+        <title>Time Leaderboard</title>
+
+        <meta charset="UTF-8"></meta>
+        <meta name="description" content="Twitch extention that tracks viewer watch time"></meta>
+        <meta name="keywords" content="Twitch extention, Viewer analytics, Twitch leaderboard"></meta>
+        <meta name="author" content="lito_john"></meta>
+
+
+    </head>
+
+    <body>
+
+        <div>
+            <p align="center">Viewer Watch Time Leaderboard</p>
+        </div>
+
+        <div id="tabs">
+            <button class="tabtimes">Overall</button>
+            <button class="tabtimes">Month</button>
+            <button class="tabtimes">Week</button>
+            <button class="tabtimes">Day</button>
+            <button class="tabtimes" onclick="display()">Sesssion</button>
+        </div>
+
+        <div id="board">
+        </div>
+
+        <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+        <script src="viewerfrontend.js"></script>
+    </body>
+
+</html>
