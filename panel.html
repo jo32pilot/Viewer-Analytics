@@ -19,6 +19,10 @@
             <p align="center">Viewer Watch Time Leaderboard</p>
         </div>
 
+        <div>
+            <button onclick="refresh()">Refresh</button>
+        </div>
+
         <div id="tabs">
             <button class="tabtimes">Overall</button>
             <button class="tabtimes">Month</button>
@@ -27,8 +31,8 @@
             <button class="tabtimes" onclick="display()">Sesssion</button>
         </div>
 
-        <div id="board">
-        </div>
+        <ul id="board">
+        </ul>
 
         <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
         <script src="viewerfrontend.js"></script>
