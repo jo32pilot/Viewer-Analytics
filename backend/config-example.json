@@ -1,0 +1,17 @@
+{
+    "certPath": "../conf/public.pem",
+    "keyPath": "../conf/private.pem",
+
+    "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "auth_title",
+        "Access-Control-Max-age": 600
+    },
+
+    "port": 48091,
+
+    "initBoard": "/initBoard",
+
+    "authTitle": "extension-jwt"
+}

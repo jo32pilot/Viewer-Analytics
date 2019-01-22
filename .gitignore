@@ -1,3 +1,5 @@
 cpd.sh
 test.js
 backend/config.json
+node_modules
+*.pem

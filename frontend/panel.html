@@ -10,6 +10,9 @@
         <meta name="keywords" content="Twitch extention, Viewer analytics, Twitch leaderboard"></meta>
         <meta name="author" content="lito_john"></meta>
 
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+        <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+        <script src="viewerfrontend.js"></script>
 
     </head>
 
@@ -20,7 +23,7 @@
         </div>
 
         <div>
-            <button onclick="refresh()">Refresh</button>
+            <button id = "refresh">Refresh</button>
         </div>
 
         <div id="tabs">
@@ -28,15 +31,12 @@
             <button class="tabtimes">Month</button>
             <button class="tabtimes">Week</button>
             <button class="tabtimes">Day</button>
-            <button class="tabtimes" onclick="display()">Sesssion</button>
+            <button class="tabtimes">Session</button>
         </div>
 
         <ul id="board">
         </ul>
 
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-        <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
-        <script src="viewerfrontend.js"></script>
     </body>
 
 </html>
