@@ -1,5 +1,5 @@
 cpd.sh
-test.js
+*test.js
 backend/config.json
 node_modules
 *.pem

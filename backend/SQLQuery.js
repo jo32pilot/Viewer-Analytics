@@ -27,41 +27,17 @@ function addStreamerTable(streamerid){
 
 function addViewer(streamerid, viewerid, viewerUserName){
 
-    pool.getConnection(function(err, connection){
+    pool.query("INSERT INTO ? (id, username) VALUES (?, ?);"
+            [streamerid, viewerid, viewerUserName], function(error){
 
-        // Not connected in the first place, no need to close connection.
-        if(err){
-            throw err;
-        }
-
-        // Aquire lock to prevent primary key violation as multiple 
-        // connections / threads are manipulating the table.
-        connection.query("LOCK TABLES ? WRITE;", streamerid, function(error){
-        
-            _assertError(error, connection);
-
-        });
-
-        connection.query("INSERT INTO ? (id, username) VALUES (?, ?);"
-                [streamerid, viewerid, viewerUserName], function(error){
-
-            _assertError(error, connection);
-
-        });
-
-        connection.query("UNLOCK TABLES;" function(error){
-        
-            _assertError(error, connection);
-
-        });
-
-        connection.release();
+        throw err;
+        //log this
 
     });
-    
+
 }
 
-function updateTime(streamerid, viewerid){
+function updateTime(streamerid, viewerid, time){
 
     pool.query("");
 
