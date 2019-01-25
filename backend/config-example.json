@@ -13,5 +13,12 @@
 
     "initBoard": "/initBoard",
 
-    "authTitle": "extension-jwt"
+    "authTitle": "extension-jwt",
+
+    "limit": 100,
+    "SQLHost": "localhost",
+    "SQLUser": "root",
+    "SQLPassword": "YOUR_PASSWORD_HERE",
+    "database": "YOUR_DATABASE_HERE"
+
 }
