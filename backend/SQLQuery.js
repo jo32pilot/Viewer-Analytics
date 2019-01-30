@@ -60,8 +60,6 @@ function fetchTables(streams, toPopulate){
                 //the main file and to shut down the server gracefully.
                 _assertError(error, connection);
 
-                console.log(results);
-
                 toPopulate[stream] = {};
                 for(let row of results){
                     
@@ -136,13 +134,13 @@ function updateTime(times){
 
         for(let stream in times){
 
-            stream = sql.raw(stream);
+            streamRaw = sql.raw(stream);
 
-            for(let viewer in stream){
+            for(let viewer in times[stream]){
 
-                viewer = sql.raw(viewer);
                 connection.query("UPDATE ? SET time=? WHERE id=?;", 
-                        [stream, stream[viewer], viewer], function(error){
+                        [streamRaw, times[stream][viewer], viewer], 
+                        function(error){
                  
                     _assertError(err, connection);
 
@@ -159,13 +157,12 @@ function updateTime(times){
 function endConnections(){
 
     let wait = setInterval(function(){
-
+        
         if(aliveConnections.length == 0){
     
             pool.end(function(err){
 
                 //log error
-                console.log("Ended");
 
             });
 
