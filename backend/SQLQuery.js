@@ -1,3 +1,9 @@
+/**
+ * @fileoverview Defines functions to act as shortcuts for MySQL commands.
+ * Dependencies:
+ *      - [mysql](https://www.npmjs.com/package/mysql)
+ */
+
 const sql = require("mysql");
 const json = require("./config.json");
 
@@ -11,9 +17,9 @@ module.exports = {
 };
 
 
+let pool = undefined; //Connection pool to MySQL server
 
-let pool = undefined;
-let aliveConnections = [];
+let aliveConnections = 0; // Int denoting number of unreleased connections.
 
 /**
  * Creates connection pool to mysql server. Could have just initialized
@@ -37,17 +43,18 @@ function startConnections(){
 /**
  * Gets times from database for all streams in stream and populates passed in
  * object with the data.
- * @param {Array} Array of stream ids to get data for.
- * @param {Object} Object to populate data with.
+ * @param {Array} streams Array of stream ids to get data for.
+ * @param {Object} toPopulate Generic object to populate data with.
  */
 function fetchTables(streams, toPopulate){
 
-    aliveConnections.push(true);
+    aliveConnections++;
 
     pool.getConnection(function(err, connection){
 
+        // If error occurs, connection doesn't exist, so no need to release.
         if(err){
-            aliveConnections.pop();
+            aliveConnections--;
             throw err;
         }
 
@@ -71,7 +78,7 @@ function fetchTables(streams, toPopulate){
         }
 
         connection.release();
-        aliveConnections.pop();
+        aliveConnections--;
 
     });
 
@@ -83,20 +90,20 @@ function fetchTables(streams, toPopulate){
 function addStreamerTable(streamerid){
 
     streamerid = sql.raw(streamerid);
-    aliveConnections.push(true);
+    aliveConnections++;
 
     pool.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
             + "username VARCHAR(50) NOT NULL UNIQUE, time INT DEFAULT 0, "
             + "PRIMARY KEY(id));", [streamerid], function(err){
         
         if(err){
-            aliveConnections.pop();
+            aliveConnections--;
             throw err;
         }
         
     });
 
-    aliveConnections.pop();
+    aliveConnections--;
 
 }
 
@@ -104,31 +111,31 @@ function addViewer(streamerid, viewerid, viewerUserName){
 
     streamerid = sql.raw(streamerid);
 
-    aliveConnections.push(true);
+    aliveConnections++;
     
     pool.query("INSERT INTO ? VALUES (?, ?, ?);",
             [streamerid, viewerid, viewerUserName, 0], function(error){
 
         if(error){
-            aliveConnections.pop()
+            aliveConnections--;
             throw error;
             //log this
         }
 
     });
 
-    aliveConnections.pop();
+    aliveConnections--;
 
 }
 
 function updateTime(times){
 
-    aliveConnections.push(true);
+    aliveConnections++;
 
     pool.getConnection(function(err, connection){
         
         if(err){
-            aliveConnections.pop();
+            aliveConnections--;
             throw err;
         }
 
@@ -149,24 +156,31 @@ function updateTime(times){
         }
 
         connection.release();
-        aliveConnections.pop();
+        aliveConnections--;
 
     });
 }
 
-function endConnections(){
+function endConnections(callback){
 
     let wait = setInterval(function(){
         
-        if(aliveConnections.length == 0){
-    
+        if(aliveConnections == 0){
+   
+            if(pool == undefined){
+                clearInterval(wait);
+                callback(0);
+            }
+
             pool.end(function(err){
 
+                clearInterval(wait);
+
+                // Assuming the callback will be process.exit
+                callback(0);                
                 //log error
 
             });
-
-            clearInterval(wait);
     
         }
 
@@ -176,7 +190,7 @@ function endConnections(){
 
 function _assertError(err, connection){
     if(err){
-        aliveConnections.pop();
+        aliveConnections--;
         connection.release();
         throw err;
     };

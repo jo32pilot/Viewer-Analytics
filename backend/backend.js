@@ -7,6 +7,7 @@
  *      - [jsrsasign](https://github.com/kjur/jsrsasign)
  */
 
+const sql = require("./SQLQuery");
 const jwt = require("jsrsasign");
 const https = require("https");
 const fs = require("fs");
@@ -33,6 +34,8 @@ const options = {
 
 const server = https.createServer(options, function(req, res){
 
+    sql.startConnections();
+
     const headers = json.headers;
 
     if(req.method == "OPTIONS"){
@@ -58,4 +61,23 @@ const server = https.createServer(options, function(req, res){
 function getData(){
     //temporary
     return "{\"data\":\"sample\", \"data2\":\"sample2\"}";
+}
+
+
+process.on("SIGTERM", function(){
+    killGracefully();
+});
+
+process.on("SIGINT", function(){
+    killGracefully();
+});
+
+function killGracefully(){
+
+    server.close(function(){
+    
+        sql.endConnections(process.exit);
+
+    });
+
 }
