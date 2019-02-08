@@ -1,4 +1,8 @@
 {
+    "secret": "YOUR_SECRET_HERE",
+    "configId": "YOUR_CLIENT_ID_HERE",
+    "myId": "YOUR_USER_ID_HERE",
+    
     "certPath": "../conf/public.pem",
     "keyPath": "../conf/private.pem",
 
@@ -14,6 +18,16 @@
     "initBoard": "/initBoard",
 
     "authTitle": "extension-jwt",
+
+    "extensionURL": "https://api.twitch.tv/extension/YOUR_CLIENT_ID_HERE/",
+    "apiURL": "https://api.twitch.tv/helix/",
+    "alg": "YOUR_PREFERRED_ALGORITHM_HERE",
+    "jwtHeader": {
+        "alg": "YOUR_PREFERRED_ALGORITHM_HERE",
+        "typ": "jwt"
+    },
+    "expirationTime": 600,
+    "payloadRole": "external", 
 
     "limit": 100,
     "SQLHost": "localhost",

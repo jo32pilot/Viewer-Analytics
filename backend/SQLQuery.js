@@ -12,6 +12,9 @@ module.exports = {
     fetchTables: fetchTables,
     addStreamerTable: addStreamerTable,
     addViewer: addViewer,
+    createStreamerList: createStreamerList,
+    updateStreamerList: updateStreamerList,
+    fetchStreamerList: fetchStreamerList,
     updateTime: updateTime,
     endConnections: endConnections,
 };
@@ -60,17 +63,20 @@ function fetchTables(streams, toPopulate){
 
         for(let stream of streams){
 
+            // Get the table of stream
             connection.query("SELECT * FROM ?;", [sql.raw(stream)], 
                     function(error, results, fields){
                 
-                //be sure to catch all of the thrown errors in
-                //the main file and to shut down the server gracefully.
                 _assertError(error, connection);
 
                 toPopulate[stream] = {};
                 for(let row of results){
                     
-                    toPopulate[stream][row.username] = row.time;
+                    // Populate stream's associative array with username as key
+                    // and an array containing the user's time as the value.
+                    // We attach a time tracker as the second element in the 
+                    // user's array later
+                    toPopulate[stream][row.username] = [row.time];
 
                 }
 
@@ -84,50 +90,125 @@ function fetchTables(streams, toPopulate){
 
 }
 
-//also add them to watchedStream table.
+/**
+ * Creates a table on the MySQL server. Each table created by this function
+ * belongs to the streamer whose id was input. Tables contain viewers'
+ * ids, usernames, and accumulated times.
+ * @param {String} channelId Unique id of streamer's channel to name the table.
+ */
+function addStreamerTable(channelId){
 
-
-function addStreamerTable(streamerid){
-
-    streamerid = sql.raw(streamerid);
+    channelId = sql.raw(channelId);
     aliveConnections++;
 
     pool.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
             + "username VARCHAR(50) NOT NULL UNIQUE, time INT DEFAULT 0, "
-            + "PRIMARY KEY(id));", [streamerid], function(err){
+            + "PRIMARY KEY(id));", [channelId], function(err){
+        
+        aliveConnections--;
         
         if(err){
-            aliveConnections--;
             throw err;
         }
-        
     });
-
-    aliveConnections--;
-
 }
 
-function addViewer(streamerid, viewerid, viewerUserName){
+/**
+ * Adds a new viewer to the streamer's table.
+ * @param {String} channelId Unique id of streamer's channel to add viewer to.
+ * @param {String} viewerId Unique if of viewer being added to the table.
+ * @param {String} viewerUsername Display/login name of viewer being added to 
+ *                 the table.
+ */
+function addViewer(channelId, viewerId, viewerUsername){
 
-    streamerid = sql.raw(streamerid);
-
+    channelId = sql.raw(channelId);
     aliveConnections++;
     
     pool.query("INSERT INTO ? VALUES (?, ?, ?);",
-            [streamerid, viewerid, viewerUserName, 0], function(error){
+            [channelId, viewerId, viewerUsername, 0], function(error){
+            
+        aliveConnections--;
 
         if(error){
-            aliveConnections--;
             throw error;
             //log this
         }
-
     });
-
-    aliveConnections--;
-
 }
 
+/**
+ * Creates table to store list of streamer channel ids. Used for ease
+ * of access of channel ids when restarting server if ever needed.
+ */
+function createStreamerList(){
+
+    aliveConnections++;
+
+    pool.query("CREATE TABLE list_of_streamers(channel_id VARCHAR(50), " + 
+            "PRIMARY KEY(channel_id));", function(error){
+        
+        aliveConnections--;
+
+        if(error){
+            throw error;
+        }
+    });
+}
+
+/**
+ * Updates list of channel ids with a new channel id.
+ * @param {String} channelId Unique id of streamer's channel to add.
+ */
+function updateStreamerList(channelId){
+
+    aliveConnections++;
+
+    pool.query("INSERT INTO list_of_streamers VALUES (?);", [channelId],
+            function(error){
+   
+        aliveConnections--;
+
+        if(error){
+            throw error;
+        }
+    });
+}
+
+/**
+ * Gets all streamers' channel ids.
+ * @param {Array} toPopulate Array to populate streamer channel ids with.
+ */
+function fetchStreamerList(toPopulate){
+
+    aliveConnections++;
+
+    pool.query("SELECT * FROM list_of_streamers;", 
+            function(error, results, fields){
+
+        aliveConnections--;
+
+        if(error){
+            throw error;
+        }
+     
+        for(let row of results){
+            
+            toPopulate.push(row["channel_id"]);
+
+        }
+    });
+}
+
+/**
+ * Updates the MySQL server with all times withing the passed in times 
+ * object.
+ * @param {Object} Associative array with streamer channel ids as keys and
+ *                 another associative array as their values. The inner 
+ *                 associative array contains viewer display names as keys
+ *                 and an array containing accumulated time and possibly
+ *                 a time tracker as values.
+ */
 function updateTime(times){
 
     aliveConnections++;
@@ -139,14 +220,17 @@ function updateTime(times){
             throw err;
         }
 
+        // Go through each stream
         for(let stream in times){
 
             streamRaw = sql.raw(stream);
 
+            // Go through each person
             for(let viewer in times[stream]){
 
-                connection.query("UPDATE ? SET time=? WHERE id=?;", 
-                        [streamRaw, times[stream][viewer], viewer], 
+                // Index by username which are also unique
+                connection.query("UPDATE ? SET time=? WHERE username=?;", 
+                        [streamRaw, times[stream][viewer][0], viewer], 
                         function(error){
                  
                     _assertError(err, connection);
@@ -161,33 +245,37 @@ function updateTime(times){
     });
 }
 
-function endConnections(callback){
+/**
+ * End connections in connection pool.
+ */
+function endConnections(){
 
+    // Periodically check if there are any more alive connections.
     let wait = setInterval(function(){
         
+        // Once all connections are released clear the interval and end the
+        // pool.
         if(aliveConnections == 0){
    
             if(pool == undefined){
                 clearInterval(wait);
-                callback(0);
             }
 
             pool.end(function(err){
 
                 clearInterval(wait);
-
-                // Assuming the callback will be process.exit
-                callback(0);                
                 //log error
 
             });
-    
         }
-
     });
-
 }
 
+/**
+ * Asserts if an error occurred and handles accordingly.
+ * @param {Object} err Error that occurred.
+ * @param {Object} connection Connection to close if error occurred.
+ */
 function _assertError(err, connection){
     if(err){
         aliveConnections--;

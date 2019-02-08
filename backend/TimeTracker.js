@@ -3,6 +3,10 @@
  * time for any given channel.
  */
 
+module.exports = {
+    TimeTracker: TimeTracker
+};
+
 const ONE_SECOND = 1000;
 
 /**

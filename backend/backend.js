@@ -7,6 +7,7 @@
  *      - [jsrsasign](https://github.com/kjur/jsrsasign)
  */
 
+const time = require("./TimeTracker");
 const sql = require("./SQLQuery");
 const jwt = require("jsrsasign");
 const https = require("https");
@@ -24,6 +25,14 @@ const $ = require("jquery")(window);
 //All other constants go in config.json
 const JSON_PATH = "./config.json";
 const json = require(JSON_PATH);
+const ENCODED_KEY = Buffer.from(json.secret, "base64")
+const jwt = KJUR.jws.JWS;
+const TimeTracker = time.TimeTracker;
+
+const trackers = {};  
+
+sql.startConnections();
+populateTrackers();
 
 const options = {
 
@@ -34,7 +43,6 @@ const options = {
 
 const server = https.createServer(options, function(req, res){
 
-    sql.startConnections();
 
     const headers = json.headers;
 
@@ -47,22 +55,73 @@ const server = https.createServer(options, function(req, res){
     
     if(req.method == "GET" && req.url == json.initBoard){
 
-        res.writeHead(200, headers);
-        res.end(getData());
+        if(jwt.verifyJWT(req.headers.AUTH_TITLE, ENCODED_KEY)){
+
+            const requestPayload = jwt.parse(req.headers.AUTH_TITLE);
+            const channelId = requestPayload["channel_id"];
+            if(!trackers.hasOwnProperty(channelId)){
+                trackers[channelId] = {};
+                sql.updateStreamerList(channelId);
+                sql.addStreamerTable(channelId);
+            }
+            
+            $.ajax({
+
+                url: json.apiURL + "users?id=" + requestPayload["user_id"],
+                type: "GET",
+                headers:{
+                    Client-ID: json.clientId
+                },
+                success: function(response){
+
+                    const displayName = response["display_name"];
+                    const tracker = new TimeTracker(displayName);
+                    if(!trackers[channelId].hasOwnProperty(displayName)){
+
+                        trackers[channelId] = [0, tracker];
+                        sql.addViewer(channelId, response["id"], displayName);
+
+                    }
+
+                }
+
+            });
+
+
+            res.writeHead(200, headers);
+            res.end(JSON.stringify(trackers));
+
+        }
+
+        // Handle if jwt is invalid.
 
     }
 
 }).listen(json.port);
 
 
-/**
- * Retrieves data from database.
- */
-function getData(){
-    //temporary
-    return "{\"data\":\"sample\", \"data2\":\"sample2\"}";
+function populateTrackers(){
+    const streamers = [];
+    fetchStreamerList(streamers);
+    const inter = setInterval(function{
+
+        if(streamers != []){
+            fetchTables(streamers, trackers);
+            clearInterval(inter);
+        }
+
+    }, 1000);
 }
 
+function killGracefully(){
+
+    sql.endConnections();
+
+    server.close(function(){
+        process.exit(0);
+    });
+
+}
 
 process.on("SIGTERM", function(){
     killGracefully();
@@ -72,12 +131,3 @@ process.on("SIGINT", function(){
     killGracefully();
 });
 
-function killGracefully(){
-
-    server.close(function(){
-    
-        sql.endConnections(process.exit);
-
-    });
-
-}
