@@ -10,6 +10,7 @@ const json = require("./config.json");
 module.exports = {
     startConnections: startConnections,
     fetchTables: fetchTables,
+    fetchLongTable: fetchLongTable,
     addStreamerTable: addStreamerTable,
     addViewer: addViewer,
     createStreamerList: createStreamerList,
@@ -19,7 +20,7 @@ module.exports = {
     endConnections: endConnections,
 };
 
-const _WHITELIST_SUFFIX = "WS"
+const _WHITELIST_SUFFIX = "WS";
 
 let pool = undefined; //Connection pool to MySQL server
 
@@ -68,7 +69,7 @@ function fetchTables(streams, regular, whitelisted){
         for(let stream of streams){
 
             // Get the table of stream
-            connection.query("SELECT username, session FROM ?;", [sql.raw(stream)], 
+            connection.query("SELECT username FROM ?;", [sql.raw(stream)], 
                     function(error, results, fields){
                 
                 _assertError(error, connection);
@@ -77,16 +78,14 @@ function fetchTables(streams, regular, whitelisted){
                 for(let row of results){
                     
                     // Populate stream's associative array with username as key
-                    // and an array containing the user's time as the value.
-                    // We attach a time tracker as the second element in the 
-                    // user's array later
-                    regular[stream][row.username] = [row.session];
+                    // and possibly a TimeTracker if the viewer is watching.
+                    regular[stream][row.username] = undefined;
 
                 }
 
             });
 
-            connection.query("SELECT username, session FROM ?;", 
+            connection.query("SELECT username FROM ?;", 
                     [sql.raw(stream + _WHITELIST_SUFFIX)]),
                     function(error, results, fields){
 
@@ -96,7 +95,7 @@ function fetchTables(streams, regular, whitelisted){
                 for(let row of results){
                     
                     // Same as when populating regular.
-                    whitelisted[stream][row.username] = [row.session];
+                    whitelisted[stream][row.username] = undefined;
 
                 }
              }
@@ -156,11 +155,11 @@ function addStreamerTable(channelId){
             throw err;
         }
         
-        // Create table which stores user accumulated times.
+        // Create table which stores viewer accumulated times.
         connection.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
                 + "username VARCHAR(50) NOT NULL UNIQUE, "
-                + "session INT DEFAULT 0, week INT DEFAULT 0, "
-                + "month INT DEFAULT 0, year INT DEFAULT 0 "
+                + "week INT DEFAULT 0, month INT DEFAULT 0, 
+                + "year INT DEFAULT 0, "
                 + "all_time INT DEFAULT 0, PRIMARY KEY(id));",
                 [channelId], function(error){
 
@@ -168,11 +167,10 @@ function addStreamerTable(channelId){
 
         });
 
-        // Create table which stores session accumulated times for whitelisted
-        // users.
+        // Create table which stores accumulated times for whitelisted viewers.
         connection.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
                 + "username VARCHAR(50) NOT NULL UNIQUE, "
-                + "session INT DEFAULT 0, week INT DEFAULT 0, "
+                + "week INT DEFAULT 0, "
                 + "month INT DEFAULT 0, year INT DEFAULT 0 "
                 + "all_time INT DEFAULT 0, PRIMARY KEY(id));",
                 [whitelistId], function(error){
@@ -207,8 +205,8 @@ function addViewer(channelId, viewerId, viewerUsername, whitelisted=false){
 
     aliveConnections++;
     
-    pool.query("INSERT INTO ? VALUES (?, ?, ?);",
-            [channelId, viewerId, viewerUsername, 0, 0, 0, 0, 0], 
+    pool.query("INSERT INTO ? VALUES (?, ?, ?, ?, ?, ?);",
+            [channelId, viewerId, viewerUsername, 0, 0, 0, 0], 
             function(error){
             
         aliveConnections--;
@@ -307,7 +305,7 @@ function updateTime(regular, whitelisted){
 
         // Update all times with current session time.
         // Index by username which are also unique.
-        query = "UPDATE ? SET session=?, week=? + (SELECT week), "
+        query = "UPDATE ? SET week=? + (SELECT week), "
                 + "month=? + (SELECT month), year=? + (SELECT year), "
                 + "all_time=? + (SELECT all_time) WHERE username=?;";
 
@@ -320,8 +318,11 @@ function updateTime(regular, whitelisted){
             // Go through each person not whitelisted
             for(let viewer in regular[stream]){
 
-                sessionTime = regular[stream][viewer][0];
-                queryArgs = [streamRaw, sessionTime, sessionTime, sessionTime,
+                if(regular[stream][viewer] == undefined){
+                    continue;
+                }
+                sessionTime = regular[stream][viewer].time;
+                queryArgs = [streamRaw, sessionTime, sessionTime,
                              sessionTime, sessionTime, viewer];
                 
                 connection.query(query, queryArgs, function(error){
@@ -334,8 +335,11 @@ function updateTime(regular, whitelisted){
             // Go through each whitelisted person
             for(let viewer in whitelisted[stream]){
                 
-                sessionTime = whitelisted[stream][viewer][0];
-                queryArgs = [whitelistRaw, sessionTime, sessionTime, sessionTime,
+                if(regular[stream][viewer] == undefined){
+                    continue;
+                }
+                sessionTime = whitelisted[stream][viewer].time;
+                queryArgs = [whitelistRaw, sessionTime, sessionTime,
                              sessionTime, sessionTime, viewer];
 
                 connection.query(query, queryArgs, function(error){
