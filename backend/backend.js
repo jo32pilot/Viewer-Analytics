@@ -7,9 +7,9 @@
  *      - [jsrsasign](https://github.com/kjur/jsrsasign)
  */
 
+const jsrsasign = require("jsrsasign");
 const time = require("./TimeTracker");
 const sql = require("./SQLQuery");
-const jwt = require("jsrsasign");
 const https = require("https");
 const fs = require("fs");
 
@@ -26,10 +26,11 @@ const $ = require("jquery")(window);
 const JSON_PATH = "./config.json";
 const json = require(JSON_PATH);
 const ENCODED_KEY = Buffer.from(json.secret, "base64")
-const jwt = KJUR.jws.JWS;
+const jwt = jsrsasign.KJUR.jws.JWS;
 const TimeTracker = time.TimeTracker;
 
-const trackers = {};  
+const trackers = {};
+const whitelisted = {};
 
 sql.startConnections();
 populateTrackers();
@@ -43,7 +44,6 @@ const options = {
 
 const server = https.createServer(options, function(req, res){
 
-
     const headers = json.headers;
 
     if(req.method == "OPTIONS"){
@@ -52,7 +52,7 @@ const server = https.createServer(options, function(req, res){
         res.end();
 
     }
-    
+
     if(req.method == "GET" && req.url == json.initBoard){
 
         if(jwt.verifyJWT(req.headers.AUTH_TITLE, ENCODED_KEY)){
@@ -70,27 +70,35 @@ const server = https.createServer(options, function(req, res){
                 url: json.apiURL + "users?id=" + requestPayload["user_id"],
                 type: "GET",
                 headers:{
-                    Client-ID: json.clientId
+                    "Client-ID": json.clientId
                 },
                 success: function(response){
 
-                    const displayName = response["display_name"];
-                    const tracker = new TimeTracker(displayName);
-                    if(!trackers[channelId].hasOwnProperty(displayName)){
-
-                        trackers[channelId] = [0, tracker];
-                        sql.addViewer(channelId, response["id"], displayName);
-
+                    if(requestPayload["role"] == "broadcaster"){
+                        return;
                     }
 
-                }
+                    const displayName = response["display_name"];
+                    const tracker = new TimeTracker(displayName);
 
+                    if(!trackers[channelId].hasOwnProperty(displayName)){
+                        sql.addViewer(channelId, response["id"], displayName);
+                    }
+
+                    // Must go after if statement, otherwise viewer might never
+                    // get added.
+                    trackers[channelId][displayName] = tracker;
+                }
             });
 
 
             res.writeHead(200, headers);
-            res.end(JSON.stringify(trackers));
+            res.end(JSON.stringify(trackers[channelId]));
 
+        }
+        else{
+            res.writeHead(400);
+            res.end();
         }
 
         // Handle if jwt is invalid.
@@ -102,11 +110,11 @@ const server = https.createServer(options, function(req, res){
 
 function populateTrackers(){
     const streamers = [];
-    fetchStreamerList(streamers);
-    const inter = setInterval(function{
+    sql.fetchStreamerList(streamers);
+    const inter = setInterval(function(){
 
         if(streamers != []){
-            fetchTables(streamers, trackers);
+            sql.fetchTables(streamers, trackers, whitelisted);
             clearInterval(inter);
         }
 

@@ -158,7 +158,7 @@ function addStreamerTable(channelId){
         // Create table which stores viewer accumulated times.
         connection.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
                 + "username VARCHAR(50) NOT NULL UNIQUE, "
-                + "week INT DEFAULT 0, month INT DEFAULT 0, 
+                + "week INT DEFAULT 0, month INT DEFAULT 0, "
                 + "year INT DEFAULT 0, "
                 + "all_time INT DEFAULT 0, PRIMARY KEY(id));",
                 [channelId], function(error){

@@ -3,9 +3,7 @@
  * time for any given channel.
  */
 
-module.exports = {
-    TimeTracker: TimeTracker
-};
+"use strict"
 
 const ONE_SECOND = 1000;
 
@@ -33,12 +31,10 @@ class TimeTracker{
      */
     startTime(){
 
-        let currTimer = this;
-
         //Update time every second
         let tracker = setInterval(function(){
             if(!this.paused){
-                currTimer.time += 1;
+                this.time += 1;
             }
         }, ONE_SECOND);
         
@@ -71,3 +67,7 @@ class TimeTracker{
 
 
 }
+
+module.exports = {
+    TimeTracker: TimeTracker
+};
