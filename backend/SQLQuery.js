@@ -20,6 +20,7 @@ module.exports = {
     endConnections: endConnections,
 };
 
+const _REGULAR_SUFFIX = "R";
 const _WHITELIST_SUFFIX = "WS";
 
 let pool = undefined; //Connection pool to MySQL server
@@ -69,7 +70,8 @@ function fetchTables(streams, regular, whitelisted){
         for(let stream of streams){
 
             // Get the table of stream
-            connection.query("SELECT username FROM ?;", [sql.raw(stream)], 
+            connection.query("SELECT username FROM ?;", 
+                    [sql.raw(stream + _REGULAR_SUFFIX)], 
                     function(error, results, fields){
                 
                 _assertError(error, connection);
@@ -86,7 +88,7 @@ function fetchTables(streams, regular, whitelisted){
             });
 
             connection.query("SELECT username FROM ?;", 
-                    [sql.raw(stream + _WHITELIST_SUFFIX)]),
+                    [sql.raw(stream + _WHITELIST_SUFFIX)],
                     function(error, results, fields){
 
                 _assertError(error, connection);
@@ -98,7 +100,7 @@ function fetchTables(streams, regular, whitelisted){
                     whitelisted[stream][row.username] = undefined;
 
                 }
-             }
+            });
         }
 
         connection.release();
@@ -115,7 +117,7 @@ function fetchTables(streams, regular, whitelisted){
  */
 function fetchLongTable(channelId, res){
 
-    channelId = sql.raw(channelId);
+    channelId = sql.raw(channelId + _REGULAR_SUFFIX);
     aliveConnections++;
 
     pool.query("SELECT username, week, month, year, all_time FROM ?;", 
@@ -144,8 +146,8 @@ function fetchLongTable(channelId, res){
  */
 function addStreamerTable(channelId){
 
-    channelId = sql.raw(channelId);
-    whitelistId = sql.raw(channelId + _WHITELIST_SUFFIX);
+    const channelIdRegular = sql.raw(channelId + _REGULAR_SUFFIX);
+    const whitelistId = sql.raw(channelId + _WHITELIST_SUFFIX);
     aliveConnections++;
 
     pool.getConnection(function(err, connection){
@@ -161,7 +163,7 @@ function addStreamerTable(channelId){
                 + "week INT DEFAULT 0, month INT DEFAULT 0, "
                 + "year INT DEFAULT 0, "
                 + "all_time INT DEFAULT 0, PRIMARY KEY(id));",
-                [channelId], function(error){
+                [channelIdRegular], function(error){
 
             _assertError(error, connection);
 
@@ -171,7 +173,7 @@ function addStreamerTable(channelId){
         connection.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
                 + "username VARCHAR(50) NOT NULL UNIQUE, "
                 + "week INT DEFAULT 0, "
-                + "month INT DEFAULT 0, year INT DEFAULT 0 "
+                + "month INT DEFAULT 0, year INT DEFAULT 0, "
                 + "all_time INT DEFAULT 0, PRIMARY KEY(id));",
                 [whitelistId], function(error){
            
@@ -200,7 +202,7 @@ function addViewer(channelId, viewerId, viewerUsername, whitelisted=false){
         channelId = sql.raw(channelId + _WHITELIST_SUFFIX);
     }
     else{
-        channelId = sql.raw(channelId);
+        channelId = sql.raw(channelId + _REGULAR_SUFFIX);
     }
 
     aliveConnections++;
@@ -231,7 +233,7 @@ function createStreamerList(){
         
         aliveConnections--;
 
-        if(error){
+        if(error && error.message != json.tableExists){
             throw error;
         }
     });
@@ -312,7 +314,7 @@ function updateTime(regular, whitelisted){
         // Go through each stream
         for(let stream in regular){
 
-            streamRaw = sql.raw(stream);
+            streamRaw = sql.raw(stream + _REGULAR_SUFFIX);
             whitelistRaw = sql.raw(stream + _WHITELIST_SUFFIX);
 
             // Go through each person not whitelisted
@@ -390,7 +392,11 @@ function endConnections(){
 function _assertError(err, connection){
     if(err){
         aliveConnections--;
-        connection.release();
+        try{
+            connection.release();
+        }
+        catch(error){
+        }
         throw err;
     };
 }

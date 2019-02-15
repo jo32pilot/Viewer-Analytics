@@ -7,30 +7,23 @@
 //---------- CONSTANTS ----------//
 
 const SERVER_DOMAIN = "https://localhost:48091/";
-const AUTH_TITLE = "extension-jwt";
 const INITIAL_BOARD = "initBoard"
 
 //---------- SETTUP ----------//
 
-//maybe keep multiple arrays sorted different ways so we don't have to
-//sort every time?
-const viewers = [];
-
-// Object for average O(1) search for user times 
-// (Apparently they're implemented as hash maps)
-// Do not sort this into itself to put on the 
-// board. The whole point is to keep search O(1).
-var searchable = {};
-
+let authorization = undefined;
 
 //---------- FUNCTIONS / EVENT LISTENERS ----------//
 
 window.Twitch.ext.onAuthorized(function(auth){
+    
+    authorization = auth;
+
     $.ajax({
         url: SERVER_DOMAIN + INITIAL_BOARD,
         type: "GET",
         headers:{
-            AUTH_TITLE: auth.token,
+            "extension-jwt": auth.token,
         },
         success: initBoard
         //TODO Define error handler
@@ -49,7 +42,7 @@ window.Twitch.ext.onContext(function(cxt, changeArr){
 
 $(function(){
 
-    $("#refresh").on("click"), refresh);
+    $("#refresh").on("click", refresh);
 
 });
 
@@ -60,12 +53,15 @@ $(function(){
  */
 function initBoard(userTimes){
 
+    viewers = []
     searchable = JSON.parse(userTimes);
+    console.log(`${userTimes}\n`);
+    console.log(searchable);
 
     //TODO sort searchable users into viewers array by time
     
     for (let user in searchable){
-        viewers.push([user, searchable[user]]);
+        viewers.push([user, searchable[user].time]);
     }
 
     viewers.sort(function(a, b){
@@ -91,4 +87,18 @@ function displayLeaderboard(){
  */
 function refresh(){
     //TODO Require cooldown before clicking again
+    
+    if(authorization == undefined){
+        console.log("Authorization undefined.");
+    }
+
+    $.ajax({
+        url: SERVER_DOMAIN + INITIAL_BOARD,
+        type: "GET",
+        headers:{
+            "extension-jwt": authorization.token,
+        },
+        success: initBoard
+        //TODO Define error handler
+    });
 }

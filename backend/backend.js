@@ -25,7 +25,6 @@ const $ = require("jquery")(window);
 //All other constants go in config.json
 const JSON_PATH = "./config.json";
 const json = require(JSON_PATH);
-const ENCODED_KEY = Buffer.from(json.secret, "base64")
 const jwt = jsrsasign.KJUR.jws.JWS;
 const TimeTracker = time.TimeTracker;
 
@@ -33,6 +32,7 @@ const trackers = {};
 const whitelisted = {};
 
 sql.startConnections();
+sql.createStreamerList();
 populateTrackers();
 
 const options = {
@@ -55,9 +55,12 @@ const server = https.createServer(options, function(req, res){
 
     if(req.method == "GET" && req.url == json.initBoard){
 
-        if(jwt.verifyJWT(req.headers.AUTH_TITLE, ENCODED_KEY)){
+        if(jwt.verifyJWT(req.headers["extension-jwt"], 
+                {"b64": json.secret}, {alg: [json.alg]})){
 
-            const requestPayload = jwt.parse(req.headers.AUTH_TITLE);
+            console.log("Processing request...");
+
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).payloadObj;
             const channelId = requestPayload["channel_id"];
             if(!trackers.hasOwnProperty(channelId)){
                 trackers[channelId] = {};
@@ -88,15 +91,20 @@ const server = https.createServer(options, function(req, res){
                     // Must go after if statement, otherwise viewer might never
                     // get added.
                     trackers[channelId][displayName] = tracker;
+                },
+
+                // TODO redefine
+                error: function(){
+                    console.log("User probably doesn't exist.");
                 }
             });
-
 
             res.writeHead(200, headers);
             res.end(JSON.stringify(trackers[channelId]));
 
         }
         else{
+            console.log("FORBIDDEN");
             res.writeHead(400);
             res.end();
         }
