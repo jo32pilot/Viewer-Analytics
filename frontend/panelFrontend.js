@@ -48,14 +48,7 @@ window.Twitch.ext.onContext(function(cxt, changeArr){
 $("#refresh").on("click", refresh);
 $("#text").submit(name, function(event){
 
-    $.ajax({
-        type: "GET",
-        url: SERVER_DOMAIN + SEARCH_USER,
-        headers:{
-            "userToSearch": name
-        },
-        success: displaySearch
-    });
+    _createRequest(SEARCH_USER, displaySearch, name);
 
 });
 
@@ -75,15 +68,7 @@ $(window).on("scroll", function(){
             
                 text: `${i + 1}. ${viewers[i]}`,
                 click: function(){
-
-                    $.ajax({
-                        type: "GET",
-                        url: SERVER_DOMAIN + LONG_STATS,
-                        headers: {
-                            "extension-jwt": authorization.token
-                        }
-                        success: displayIndividual
-                    });
+                    _createRequest(LONG_STATS, displayIndividual);
                 }
 
             });
@@ -119,15 +104,7 @@ function initBoard(userTimes){
         
             text: `${i + 1}. ${viewers[i]}`,
             click: function(){
-
-                $.ajax({
-                    type: "GET",
-                    url: SERVER_DOMAIN + LONG_STATS,
-                    headers: {
-                        "extension-jwt": authorization.token
-                    }
-                    success: displayIndividual
-                });
+                _createRequest(LONG_STATS, displayIndividual);
             }
 
         });
@@ -165,13 +142,25 @@ function refresh(){
         console.log("Authorization undefined.");
     }
 
+    _createRequest(INITIAL_BOARD, initBoard);
+}
+
+function _createRequest(path, callback, userToSearch=undefined){
+
+    const reqHeaders = {
+        "extension-jwt": authorization.token
+    };
+    
+    if(extraHeaders != undefined){
+        reqHeaders["userToSearch"] = userToSearch;
+    }
+
     $.ajax({
-        url: SERVER_DOMAIN + INITIAL_BOARD,
+        url: SERVER_DOMAIN + path,
         type: "GET",
-        headers:{
-            "extension-jwt": authorization.token,
-        },
-        success: initBoard
-        //TODO Define error handler
+        headers: reqHeaders
+        success: callback
+        //TODO define error handler
     });
+
 }

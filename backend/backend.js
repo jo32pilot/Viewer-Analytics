@@ -55,8 +55,7 @@ const server = https.createServer(options, function(req, res){
 
     if(req.method == "GET" && req.url == json.initBoard){
 
-        if(jwt.verifyJWT(req.headers["extension-jwt"], 
-                {"b64": json.secret}, {alg: [json.alg]})){
+        if(checkJWT(req, res){ 
 
             console.log("Processing request...");
 
@@ -104,19 +103,10 @@ const server = https.createServer(options, function(req, res){
             res.end(JSON.stringify(trackers[channelId]));
 
         }
-        else{
-            console.log("FORBIDDEN");
-            res.writeHead(400);
-            res.end();
-        }
-
-        // Handle if jwt is invalid.
-
     }
     else if(req.method == "GET" && req.url == json.toggleWhitelist){
 
-        if(jwt.verifyJWT(req.headers["extension-jwt"], 
-                {"b64": json.secret}, {alg: [json.alg]})){
+        if(checkJWT(req, res){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -134,13 +124,16 @@ const server = https.createServer(options, function(req, res){
     }
     else if(req.method == "GET" && req.url == json.longStats){
 
-        if(jwt.verifyJWT(req.headers["extension-jwt"], 
-                {"b64": json.secret}, {alg: [json.alg]})){
-        
+        if(checkJWT(req, res)){
 
+        }
     }
     else if(req.method == "GET" && req.url == json.userSearch){
 
+        if(checkJWT(req, res)){
+
+        }
+        
     }
 
 }).listen(json.port);
@@ -156,6 +149,18 @@ function populateTrackers(){
         }
 
     }, 1000);
+}
+
+function checkJWT(req, res){
+
+    if(!jwt.verifyJWT(req.headers["extension-jwt"],
+            {"b64": json.secret}, {alg: [json.alg]})){
+            
+        res.writeHead(400);
+        res.end();
+        return false;
+    }
+    return true;
 }
 
 function killGracefully(){
@@ -174,3 +179,4 @@ process.on("SIGTERM", function(){
 process.on("SIGINT", function(){
     killGracefully();
 });
+
