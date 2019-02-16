@@ -60,7 +60,8 @@ const server = https.createServer(options, function(req, res){
 
             console.log("Processing request...");
 
-            const requestPayload = jwt.parse(req.headers["extension-jwt"]).payloadObj;
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                    payloadObj;
             const channelId = requestPayload["channel_id"];
             if(!trackers.hasOwnProperty(channelId)){
                 trackers[channelId] = {};
@@ -112,9 +113,37 @@ const server = https.createServer(options, function(req, res){
         // Handle if jwt is invalid.
 
     }
+    else if(req.method == "GET" && req.url == json.toggleWhitelist){
+
+        if(jwt.verifyJWT(req.headers["extension-jwt"], 
+                {"b64": json.secret}, {alg: [json.alg]})){
+
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                    payloadObj;
+
+            if(requestPayload.role == "broadcaster"){
+                
+                
+
+            }
+            else{
+                res.writeHead(400);
+                res.end();
+            }
+        }
+    }
+    else if(req.method == "GET" && req.url == json.longStats){
+
+        if(jwt.verifyJWT(req.headers["extension-jwt"], 
+                {"b64": json.secret}, {alg: [json.alg]})){
+        
+
+    }
+    else if(req.method == "GET" && req.url == json.userSearch){
+
+    }
 
 }).listen(json.port);
-
 
 function populateTrackers(){
     const streamers = [];
@@ -136,7 +165,6 @@ function killGracefully(){
     server.close(function(){
         process.exit(0);
     });
-
 }
 
 process.on("SIGTERM", function(){
@@ -146,4 +174,3 @@ process.on("SIGTERM", function(){
 process.on("SIGINT", function(){
     killGracefully();
 });
-

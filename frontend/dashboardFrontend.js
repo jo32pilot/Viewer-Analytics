@@ -1,7 +1,7 @@
 /**
- * @fileoverview Handles frontend interaction between viewers and the
- * the extension. Just displays leaderboard in various ways as well as 
- * letting users search others and their times.
+ * @fileoverview Handles frontend interaction between broadcaster and the
+ * the extension. Almost the same as panelFronted but allows for whitelist
+ * toggle.
  */
 
 //---------- CONSTANTS ----------//
