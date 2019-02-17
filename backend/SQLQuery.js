@@ -23,6 +23,7 @@ module.exports = {
 
 const _REGULAR_SUFFIX = "R";
 const _WHITELIST_SUFFIX = "WS";
+const _GRAPH_SUFFIX = "G";
 
 let pool = undefined; //Connection pool to MySQL server
 
@@ -124,14 +125,14 @@ function fetchLongTable(channelId, res){
     pool.query("SELECT username, week, month, year, all_time FROM ?;", 
             [channelId], function(err, results, fields){
 
+        aliveConnections--;
+
         if(err){
-            aliveConnections--;
             throw err;
         }
 
         // Send MySQL response to client.
         res.end(JSON.stringify(results)); 
-        aliveConnections--;
 
     });
 
@@ -340,6 +341,73 @@ function fetchStreamerList(toPopulate){
             
             toPopulate.push(row["channel_id"]);
 
+        }
+    });
+}
+
+function createGraphTable(channelId, viewerId, viewerUsername){
+
+    channelId = sql.raw(channelId + _GRAPH_SUFFIX);
+    aliveConnections++;
+
+    pool.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
+            + "username VARCHAR(50) NOT NULL UNIQUE, PRIMARY KEY(username));", 
+            [channelId], function(err){
+
+        aliveConnections--;
+
+        if(err){
+            throw res;
+        }
+    }
+}
+
+function updateGraphTable(channelId, times){
+    //TODO update midnight everyday
+    const today = new Date();
+    today = sql.raw(`${today.getMonth()}_${today.getDate()}_${today.getFulYear}`);
+    channelId = sql.raw(channelId + _GRAPH_SUFFIX);
+    aliveConnections++;
+
+    pool.getConnection(function(err, connection){
+        
+        if(err){
+            aliveConnections--;
+            throw err;
+        }
+
+        pool.query("ALTER TABLE ? ADD ? INT NOT NULL DEFAULT 0;",
+                [channelId, today], function(error){
+         
+            _assertError(error, connection);
+        });
+        
+        for(let viewer in times){
+            pool.query("UPDATE ? SET ?=? WHERE username=?;", 
+                    [channelId, today, times[viewer], viewer], function(error){
+             
+                _assertError(error, connection);
+            });
+        }
+
+        aliveConnections--;
+        connection.release();
+
+    });
+}
+
+function addViewerGraphTable(channelId, viewerId, viewerUsername){
+
+    channelId = sql.raw(channelId + _GRAPH_SUFFIX);
+    aliveConnections++;
+
+    pool.query("INSERT INTO ? (id, username) VALUES (?, ?);",
+            [channelId, viewerId, viewerUsername], function(err){
+        
+        aliveConnections--;
+        
+        if(err){
+            throw err;
         }
     });
 }
