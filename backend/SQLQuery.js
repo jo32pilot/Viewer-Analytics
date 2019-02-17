@@ -13,6 +13,7 @@ module.exports = {
     fetchLongTable: fetchLongTable,
     addStreamerTable: addStreamerTable,
     addViewer: addViewer,
+    removeViewer: removeViewer,
     createStreamerList: createStreamerList,
     updateStreamerList: updateStreamerList,
     fetchStreamerList: fetchStreamerList,
@@ -136,7 +137,6 @@ function fetchLongTable(channelId, res){
 
 }
 
-
 /**
  * Creates a tables on the MySQL server. Each table created by this function
  * belongs to the streamer whose id was input. Tables contain viewers'
@@ -190,13 +190,17 @@ function addStreamerTable(channelId){
 /**
  * Adds a new viewer to the streamer's table.
  * @param {String} channelId Unique id of streamer's channel to add viewer to.
- * @param {String} viewerId Unique if of viewer being added to the table.
+ * @param {String} viewerId Unique id of viewer being added to the table.
  * @param {String} viewerUsername Display/login name of viewer being added to 
  *                 the table.
+ * @param {Array} times [[0, 0, 0, 0]] Weekly, monthly, yearly, and all time
+ *                accumulated times, respectively. Should default to 
+ *                [0, 0, 0, 0] if new viewer.
  * @param {boolean} whitelisted [false] Whether or not the user is being added
  *                  to the whitelist or not.
  */
-function addViewer(channelId, viewerId, viewerUsername, whitelisted=false){
+function addViewer(channelId, viewerId, viewerUsername, times=[0, 0, 0, 0], 
+        whitelisted=false){
 
     if(whitelisted){
         channelId = sql.raw(channelId + _WHITELIST_SUFFIX);
@@ -207,8 +211,8 @@ function addViewer(channelId, viewerId, viewerUsername, whitelisted=false){
 
     aliveConnections++;
     
-    pool.query("INSERT INTO ? VALUES (?, ?, ?, ?, ?, ?);",
-            [channelId, viewerId, viewerUsername, 0, 0, 0, 0], 
+    pool.query("INSERT INTO ? VALUES (?, ?, ?);",
+            [channelId, viewerId, viewerUsername, times], 
             function(error){
             
         aliveConnections--;
@@ -216,6 +220,37 @@ function addViewer(channelId, viewerId, viewerUsername, whitelisted=false){
         if(error){
             throw error;
             //log this
+        }
+    });
+}
+
+/**
+ * Removes viewer from either the whitelist or regular list.
+ * @param {String} channelId Unique id of streamer's channel of which the 
+ *                 viewer to remove is in.
+ * @param {String} viewerId Unique id of viewer being removed from the table.
+ * @param {String} viewerUsername Display/login name of viewer being removed
+ *                 from the table.
+ * @param {boolean} whitelisted [false] True if user is currently whitelisted,
+ *                  false otherwise.
+ */
+function removeViewer(channelId, viewerId, viewerUsername, whitelisted=false){
+
+    if(whitelisted){
+        channelId = sql.raw(channelId + _WHITELIST_SUFFIX);
+    }
+    else{
+        channelId = sql.raw(channelId + _REGULAR_SUFFIX);
+    }
+
+    aliveConnections++;
+
+    pool.query("DELETE FROM ? WHERE viewerUsername=?", 
+            [channelId, viewerUsername], function(err){
+         
+        if(err){
+           aliveConnections--;
+           throw err;
         }
     });
 }

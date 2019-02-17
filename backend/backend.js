@@ -113,7 +113,36 @@ const server = https.createServer(options, function(req, res){
 
             if(requestPayload.role == "broadcaster"){
                 
-                
+                const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                        payloadObj;
+
+                $.ajax({
+
+                    url: json.apiURL + "users?id=" + requestPayload["user_id"],
+                    type: "GET",
+                    headers:{
+                        "Client-ID": json.clientId
+                    }
+                    success: function(response){
+                        
+
+                        
+                        sql.removeViewer(requestPayload["channel_id"],
+                                requestPayload["id"], 
+                                requestPayload["display_name"],
+                                req["headers"]["whitelisted"]);
+                        sql.addViewer(requestPayload["channel_id"],
+                                requestPayload["id"],
+                                requestPayload["display_name"],
+                                ,
+                                req["headers"]["whitelisted"]);
+
+
+
+                    }
+                });
+                sql.removeViewer(channelId, req["userToToggle"]);
+                sql.addViewer();
 
             }
             else{
@@ -125,17 +154,24 @@ const server = https.createServer(options, function(req, res){
     else if(req.method == "GET" && req.url == json.longStats){
 
         if(checkJWT(req, res)){
-
+            fetchLongTables(req["channelId"], res);
         }
     }
     else if(req.method == "GET" && req.url == json.userSearch){
 
         if(checkJWT(req, res)){
 
+            const responsePayload = {};
+            // This is super slow
+            for(let viewer in regular){
+                if(viewer.includes(name){
+                    responsePayload[viewer] = time;
+                }
+            }
+            res.writeHead(200, headers);
+            res.end(responsePayload);
         }
-        
     }
-
 }).listen(json.port);
 
 function populateTrackers(){
