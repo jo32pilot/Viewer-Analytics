@@ -113,37 +113,27 @@ const server = https.createServer(options, function(req, res){
 
             if(requestPayload.role == "broadcaster"){
                 
-                const requestPayload = jwt.parse(req.headers["extension-jwt"]).
-                        payloadObj;
+                sql.swapViewer(requestPayload["channel_id"], 
+                        req.headers["userToToggle"], 
+                        req.headers["whitelisted"]);
 
-                $.ajax({
+                if(trackers.hasProperty(req.headers["userToToggle"])){
 
-                    url: json.apiURL + "users?id=" + requestPayload["user_id"],
-                    type: "GET",
-                    headers:{
-                        "Client-ID": json.clientId
-                    }
-                    success: function(response){
-                        
+                    whitelisted[req.headers["userToToggle"]] = 
+                            trackers[req.headers["userToToggle"]];
+                    delete trackers[req.headers["userToToggle"]];
+                }
+                else{
+                    
+                    trakers[req.headers["userToToggle"]] = 
+                            trackers[req.headers["userToToggle"]];
+                    delete whitelisted[req.headers["userToToggle"]];
 
-                        
-                        sql.removeViewer(requestPayload["channel_id"],
-                                requestPayload["id"], 
-                                requestPayload["display_name"],
-                                req["headers"]["whitelisted"]);
-                        sql.addViewer(requestPayload["channel_id"],
-                                requestPayload["id"],
-                                requestPayload["display_name"],
-                                ,
-                                req["headers"]["whitelisted"]);
+                }
 
-
-
-                    }
-                });
-                sql.removeViewer(channelId, req["userToToggle"]);
-                sql.addViewer();
-
+                res.writeHead(200);
+                res.end();
+                
             }
             else{
                 res.writeHead(400);

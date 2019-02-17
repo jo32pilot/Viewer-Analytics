@@ -1,17 +1,22 @@
 /**
- * @fileoverview Handles frontend interaction between broadcaster and the
- * the extension. Almost the same as panelFronted but allows for whitelist
- * toggle.
+ * @fileoverview Handles frontend interaction between viewers and the
+ * the extension. Just displays leaderboard in various ways as well as 
+ * letting users search others and their times.
  */
 
 //---------- CONSTANTS ----------//
 
 const SERVER_DOMAIN = "https://localhost:48091/";
-const INITIAL_BOARD = "initBoard"
+const INITIAL_BOARD = "initBoard";
+const LONG_STATS = "longStats";
+const SEARCH_USER = "searchUser";
+const LEADERBOARD_INCREASE = 50;
 
 //---------- SETTUP ----------//
 
 let authorization = undefined;
+let viewers = undefined;
+let currentDisplay = LEADERBOARD_INCREASE;
 
 //---------- FUNCTIONS / EVENT LISTENERS ----------//
 
@@ -40,26 +45,50 @@ window.Twitch.ext.onContext(function(cxt, changeArr){
     console.log("onContext fired");
 });
 
-$(function(){
+$("#refresh").on("click", refresh);
+$("#text").submit(name, function(event){
 
-    $("#refresh").on("click", refresh);
+    _createRequest(SEARCH_USER, displaySearch, name);
 
+});
+
+// Credit to https://gist.github.com/toshimaru/6102647 for this event listener
+// that detects the scrolling to the bottom of a page.
+$(window).on("scroll", function(){
+
+    var scrollHeight = $(document).height();
+    var scrollPosition = $(window).height() + $(window).scrollTop();
+    if((scrollHeight - scrollPosition) / scrollHeight == 0){
+        
+        // Adds another 50 users to the leaderboard.
+        for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE;
+                i++){
+            
+            let item = $("<button/>", {
+            
+                text: `${i + 1}. ${viewers[i]}`,
+                click: function(){
+                    _createRequest(LONG_STATS, displayIndividual);
+                }
+
+            });
+            
+            $("leaderboard").append(item);
+        }
+
+        currentDisplay += LEADERBOARD_INCREASE;
+    }
 });
 
 
 /**
  * Populates board and global variables for the first time.
- *
  */
 function initBoard(userTimes){
 
     viewers = []
-    searchable = JSON.parse(userTimes);
-    console.log(`${userTimes}\n`);
     console.log(searchable);
 
-    //TODO sort searchable users into viewers array by time
-    
     for (let user in searchable){
         viewers.push([user, searchable[user].time]);
     }
@@ -68,17 +97,38 @@ function initBoard(userTimes){
         return a[1] - b[1];
     });
 
-    for (let user of viewers){
-        let item = $("<li>").text(`${user[0]}: ${user[1]}`);
-        $("#board").append(item);
+    
+    for(let i = 0; i < currentDisplay; i++){
+
+        let item = $("<button/>", {
+        
+            text: `${i + 1}. ${viewers[i]}`,
+            click: function(){
+                _createRequest(LONG_STATS, displayIndividual);
+            }
+
+        });
+        
+        $("leaderboard").append(item);
     }
 }
 
 /**
- * Displays leaderboard onto the iframe
+ * Displays search results in the form of a leaderboard.
+ * @param {ServerResponse} res Response payload from server containing
+ *                         the closest matching usernames.
  */
-function displayLeaderboard(){
+function displayResults(res){
 
+}
+
+/**
+ * Displays leaderboard a given person's exhaustive watch statistics.
+ * @param {ServerResponse} res Response payload from server containing the 
+ *                         desired statistics.
+ */
+function displayIndividual(res){
+    // TODO THE BUTTON TO TOGGLE WHITELIST GOES HERE
 }
 
 
@@ -92,13 +142,25 @@ function refresh(){
         console.log("Authorization undefined.");
     }
 
+    _createRequest(INITIAL_BOARD, initBoard);
+}
+
+function _createRequest(path, callback, userToSearch=undefined){
+
+    const reqHeaders = {
+        "extension-jwt": authorization.token
+    };
+    
+    if(extraHeaders != undefined){
+        reqHeaders["userToSearch"] = userToSearch;
+    }
+
     $.ajax({
-        url: SERVER_DOMAIN + INITIAL_BOARD,
+        url: SERVER_DOMAIN + path,
         type: "GET",
-        headers:{
-            "extension-jwt": authorization.token,
-        },
-        success: initBoard
-        //TODO Define error handler
+        headers: reqHeaders
+        success: callback
+        //TODO define error handler
     });
+
 }

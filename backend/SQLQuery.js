@@ -13,7 +13,7 @@ module.exports = {
     fetchLongTable: fetchLongTable,
     addStreamerTable: addStreamerTable,
     addViewer: addViewer,
-    removeViewer: removeViewer,
+    swapViewer: swapViewer,
     createStreamerList: createStreamerList,
     updateStreamerList: updateStreamerList,
     fetchStreamerList: fetchStreamerList,
@@ -225,33 +225,59 @@ function addViewer(channelId, viewerId, viewerUsername, times=[0, 0, 0, 0],
 }
 
 /**
- * Removes viewer from either the whitelist or regular list.
+ * Removes user from regular table or whitelist table and puts them on the
+ * table they were not on previously.
  * @param {String} channelId Unique id of streamer's channel of which the 
  *                 viewer to remove is in.
- * @param {String} viewerId Unique id of viewer being removed from the table.
  * @param {String} viewerUsername Display/login name of viewer being removed
  *                 from the table.
  * @param {boolean} whitelisted [false] True if user is currently whitelisted,
  *                  false otherwise.
  */
-function removeViewer(channelId, viewerId, viewerUsername, whitelisted=false){
+function swapViewer(channelId, viewerUsername, whitelisted=false){
+
+    const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
+    const whitelistTable = sql.raw(channelId + _WHITELIST_SUFFIX);
+    const removeFrom = undefined;
 
     if(whitelisted){
-        channelId = sql.raw(channelId + _WHITELIST_SUFFIX);
+        removeFrom = whitelistTable;
     }
     else{
-        channelId = sql.raw(channelId + _REGULAR_SUFFIX);
+        removeFrom = regTable;
     }
 
     aliveConnections++;
+    
+    pool.getConnection(function(err, connection){
+        
+        const times = [];
+        let viewerId = undefined;
+        connection.query("SELECT * FROM ? WHERE viewerUsername=?;",
+                [removeFrom, viewerUsername], function(error, results, fields){
+            
+             _assertError(error, connection);
+             times.push(row.week);
+             times.push(row.month);
+             times.push(row.year);
+             times.push(row.all_time);
+             viewerId = row.id;
+        });
 
-    pool.query("DELETE FROM ? WHERE viewerUsername=?", 
-            [channelId, viewerUsername], function(err){
-         
-        if(err){
-           aliveConnections--;
-           throw err;
+        connection.query("DELETE FROM ? WHERE viewerUsername=?;", 
+                [removeFrom, viewerUsername], function(error){
+        
+            _assertError(error, connection);
         }
+
+        connection.query("INSERT INTO ? VALUES (?, ?, ?);", 
+                [viewerId, viewerUsername, times], function(error){
+
+            _assertError(error, connection);
+        }
+
+        connection.release();
+        aliveConnections--;
     });
 }
 

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <title>Admin Time Leaderboard</title>
+        <meta charset="UTF-8"></meta>
+        <meta name="description" content="Broadcaster dashboard for Viewer Analytics Twitch extension"></meta>
+        <meta name="keywords" content="Twitch extention, Viewer analytics, Twitch leaderboard"></meta>
+        <meta name="author" content="lito_john"></meta>
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+        <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+    </head>
+
+    <body>
+
+        <div>
+            <p align="center">Viewer Watch Time Leaderboard</p>
+        </div>
+
+        <div>
+            <input type="text" id="search" placeholder="Search for a user...">
+        </div>
+
+        <div>
+            <button id = "refresh">Refresh</button>
+        </div>
+
+        <div id="tabs">
+            <button class="tabtimes">Overall</button>
+            <button class="tabtimes">Month</button>
+            <button class="tabtimes">Week</button>
+            <button class="tabtimes">Day</button>
+            <button class="tabtimes">Session</button>
+        </div>
+    </body>
+
+</html>
