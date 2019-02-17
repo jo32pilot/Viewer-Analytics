@@ -16,6 +16,7 @@ const LEADERBOARD_INCREASE = 50;
 
 let authorization = undefined;
 let viewers = undefined;
+let savedBoard = undefined;
 let currentDisplay = LEADERBOARD_INCREASE;
 
 //---------- FUNCTIONS / EVENT LISTENERS ----------//
@@ -46,10 +47,19 @@ window.Twitch.ext.onContext(function(cxt, changeArr){
 });
 
 $("#refresh").on("click", refresh);
-$("#text").submit(name, function(event){
+$("#search").submit(name, function(ev){
 
-    _createRequest(SEARCH_USER, displaySearch, name);
+    _createRequest(SEARCH_USER, displayResults, name);
 
+});
+$(window).on("popstate", function(ev){
+
+    if(savedBoard != undefined){
+        $("#leaderboard").replaceWith(savedBoard);
+    }
+    else{
+        //log
+    }
 });
 
 // Credit to https://gist.github.com/toshimaru/6102647 for this event listener
@@ -84,13 +94,12 @@ $(window).on("scroll", function(){
 /**
  * Populates board and global variables for the first time.
  */
-function initBoard(userTimes){
+function initBoard(res){
 
     viewers = []
-    console.log(searchable);
 
-    for (let user in searchable){
-        viewers.push([user, searchable[user].time]);
+    for (let user in res){
+        viewers.push([user, res[user]]);
     }
 
     viewers.sort(function(a, b){
@@ -109,7 +118,7 @@ function initBoard(userTimes){
 
         });
         
-        $("leaderboard").append(item);
+        $("#board").append(item);
     }
 }
 
@@ -119,7 +128,19 @@ function initBoard(userTimes){
  *                         the closest matching usernames.
  */
 function displayResults(res){
-
+    
+    savedBoard = $("#leaderboard").clone(true, true);
+    history.pushState({}, "");
+    $("#leaderboard").empty();
+    initBoard(res);
+    //TODO animate in the back button. But for now...
+    const back = $("<button/>", {
+        text: "back",
+        click: function(){
+            history.back();
+        }
+    });
+    $("#search_div").append(back);
 }
 
 /**
@@ -128,7 +149,6 @@ function displayResults(res){
  *                         desired statistics.
  */
 function displayIndividual(res){
-
 }
 
 
