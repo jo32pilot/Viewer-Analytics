@@ -66,6 +66,7 @@ const server = https.createServer(options, function(req, res){
                 trackers[channelId] = {};
                 sql.updateStreamerList(channelId);
                 sql.addStreamerTable(channelId);
+                sql.createGraphTable(channelId);
             }
             
             $.ajax({
@@ -86,6 +87,8 @@ const server = https.createServer(options, function(req, res){
 
                     if(!trackers[channelId].hasOwnProperty(displayName)){
                         sql.addViewer(channelId, response["id"], displayName);
+                        sql.addViewerGraphTable(channelId, response["id"], 
+                                displayName);
                     }
 
                     // Must go after if statement, otherwise viewer might never

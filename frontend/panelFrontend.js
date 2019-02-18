@@ -150,8 +150,19 @@ function displayResults(res){
  */
 function displayIndividual(res){
 
-    
+    const longStats = res["longStats"][0];
+    const graphStats = res["graphStats"][0];
 
+    //temp format
+    const statsFormatted = $("<p/>", {
+        text: `Week: ${longStats["week"]}\nMonth: ${longStats["month"]}\n`
+                + `Year: ${longStats{"year"]}\nAll Time: ${longStats[all_time]}`
+    });
+    $("#individual_view").append(statsFormatted);
+
+    //TODO graphing code goes here.
+
+     $("#individual_view").toggleSlide();
 }
 
 

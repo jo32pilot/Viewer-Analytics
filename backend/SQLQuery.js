@@ -17,6 +17,9 @@ module.exports = {
     createStreamerList: createStreamerList,
     updateStreamerList: updateStreamerList,
     fetchStreamerList: fetchStreamerList,
+    createGraphTable: createGraphTable, 
+    updateGraphTable: updateGraphTable,
+    addViewerGraphTable: addViewerGraphTable,
     updateTime: updateTime,
     endConnections: endConnections,
 };
@@ -114,28 +117,49 @@ function fetchTables(streams, regular, whitelisted){
 /**
  * Gets week, month, year, and overall accumulated times for each person.
  * @param {String} stream Channel id of streamer to fetch data for.
+ * @param {String} viewerUsername Name of user to get stats for.
  * @param {ServerResponse} res Server response object used to send payload
  *                         received from the MySQL server to the client.
  */
-function fetchLongTable(channelId, res){
+function fetchLongTable(channelId, viewerUsername, res){
 
-    channelId = sql.raw(channelId + _REGULAR_SUFFIX);
+    const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
+    const graphTable = sql.raw(channelId + _GRAPH_SUFFIX);
     aliveConnections++;
 
-    pool.query("SELECT username, week, month, year, all_time FROM ?;", 
-            [channelId], function(err, results, fields){
-
-        aliveConnections--;
-
+    pool.getConnection(function(err, connection){
+    
         if(err){
+            aliveConnections--;
             throw err;
         }
 
-        // Send MySQL response to client.
-        res.end(JSON.stringify(results)); 
+        const responsePayload = {}
+        connection.query("SELECT username, week, month, year, all_time FROM ? "
+                + "WHERE username=?;", 
+                [regTable, viewerUsername], function(error, results, fields){
+    
+            _assertError(error, connection);
 
+            responsePayload["longStats"] = results;
+
+        });
+
+        connection.query("SELECT * FROM ? WHERE username=?;", 
+                [graphTable, viewerUsername], function(error, results, fields){
+
+            _assertError(error, connection);
+
+            responsePayload["graphStats"] = results;
+
+            // Send MySQL response to client.
+            res.end(JSON.stringify(results)); 
+
+        }
+
+        aliveConnections--;
+        connection.release();
     });
-
 }
 
 /**
@@ -345,7 +369,7 @@ function fetchStreamerList(toPopulate){
     });
 }
 
-function createGraphTable(channelId, viewerId, viewerUsername){
+function createGraphTable(channelId){
 
     channelId = sql.raw(channelId + _GRAPH_SUFFIX);
     aliveConnections++;
