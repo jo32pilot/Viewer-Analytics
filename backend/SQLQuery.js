@@ -476,7 +476,8 @@ function updateTime(regular, whitelisted){
                 if(regular[stream][viewer] == undefined){
                     continue;
                 }
-                sessionTime = regular[stream][viewer].time;
+                sessionTime = regular[stream][viewer].timeNotAdded;
+                regular[stream][viewer].timeNotAdded = 0;
                 queryArgs = [streamRaw, sessionTime, sessionTime,
                              sessionTime, sessionTime, viewer];
                 
@@ -493,7 +494,8 @@ function updateTime(regular, whitelisted){
                 if(regular[stream][viewer] == undefined){
                     continue;
                 }
-                sessionTime = whitelisted[stream][viewer].time;
+                sessionTime = whitelisted[stream][viewer].timeNotAdded;
+                whitelisted[stream][viewer].timeNotAdded = 0;
                 queryArgs = [whitelistRaw, sessionTime, sessionTime,
                              sessionTime, sessionTime, viewer];
 

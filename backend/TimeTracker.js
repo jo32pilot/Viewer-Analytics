@@ -18,7 +18,15 @@ class TimeTracker{
      */
     constructor(user){
         this.user = user;
+
+        // Time is total time
         this.time = 0;
+
+        // Time not added is time not yet added to the MySQL server
+        this.timeNotAdded = 0;
+
+        // Time to add to the daily object in the node server.
+        this.dailyTime = 0;
         this.paused = false;
 
         this.tracker = this.startTime();
@@ -35,6 +43,8 @@ class TimeTracker{
         let tracker = setInterval(function(){
             if(!this.paused){
                 this.time += 1;
+                this.timeNotAdded += 1;
+                this.dailyTime += 1;
             }
         }, ONE_SECOND);
         

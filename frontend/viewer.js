@@ -7,33 +7,36 @@
 //---------- CONSTANTS ----------//
 
 const SERVER_DOMAIN = "https://localhost:48091/";
+const GET_NAME = "getName";
 const INITIAL_BOARD = "initBoard";
 const LONG_STATS = "longStats";
 const SEARCH_USER = "searchUser";
+const TOGGLE_TRACKER = "toggleTracker";
+const MINUTE = 60;
+const HOUR = 60;
 const LEADERBOARD_INCREASE = 50;
 
 //---------- SETTUP ----------//
 
+let name = undefined;
 let authorization = undefined;
 let viewers = undefined;
 let savedBoard = undefined;
+let paused = false;
 let currentDisplay = LEADERBOARD_INCREASE;
 
 //---------- FUNCTIONS / EVENT LISTENERS ----------//
+
+//TODO check if name is undefined for some functions
+
+window.ext.actions.requestIdShare();
 
 window.Twitch.ext.onAuthorized(function(auth){
     
     authorization = auth;
 
-    $.ajax({
-        url: SERVER_DOMAIN + INITIAL_BOARD,
-        type: "GET",
-        headers:{
-            "extension-jwt": auth.token,
-        },
-        success: initBoard
-        //TODO Define error handler
-    });
+    _createRequest(GET_NAME, _setName);
+    _createRequest(INITIAL_BOARD, initBoard);
 
     //TODO Get rid of this line
     console.log("onAuthorized fired");
@@ -42,14 +45,25 @@ window.Twitch.ext.onAuthorized(function(auth){
 
 
 window.Twitch.ext.onContext(function(cxt, changeArr){
-    //TODO Get rid of this line
+    if(changeArr["isPaused"] == false){
+        _createRequest(TOGGLE_TRACKER, additionalArgs={
+            "paused": false
+        });
+    }
+    else if(changeArr["isPaused"] == true){
+        _createRequest(TOGGLE_TRACKER, additionalArgs={
+            "paused": true
+        });
+    }
     console.log("onContext fired");
 });
 
 $("#refresh").on("click", refresh);
 $("#search").submit(name, function(ev){
 
-    _createRequest(SEARCH_USER, displayResults, name);
+    _createRequest(SEARCH_USER, displayResults, {
+        "viewerQueriedFor": name
+    });
 
 });
 $(window).on("popstate", function(ev){
@@ -60,6 +74,13 @@ $(window).on("popstate", function(ev){
     else{
         //log
     }
+});
+$(window).on("beforeunload", function(){
+
+    _createRequest(TOGGLE_TRACKER, addititionalArgs={
+        "paused": true
+    });
+
 });
 
 // Credit to https://gist.github.com/toshimaru/6102647 for this event listener
@@ -113,7 +134,9 @@ function initBoard(res){
         
             text: `${i + 1}. ${viewers[i]}`,
             click: function(){
-                _createRequest(LONG_STATS, displayIndividual);
+                _createRequest(LONG_STATS, displayIndividual, {
+                    "viewerQueriedFor": viewer
+                });
             }
 
         });
@@ -160,6 +183,27 @@ function displayIndividual(res){
     });
     $("#individual_view").append(statsFormatted);
 
+    const ctx = $("#time_graph");
+    const dates = [];
+    const times = [];
+    for(let date in graphStats){
+        labels.push(date);
+        dataPoints.push(_secondsToHours(graphStats[date]));
+    }
+    new Chart(ctx, {
+        
+        type: "line",
+        data: {
+            labels: dates,
+            datasets: {{
+                backgroundColor: "rgb(100, 65, 164)",
+                borderColor: "rgb(100, 65, 164)",
+                data: times
+            }],
+        },
+        options: {}
+        
+    });
     //TODO graphing code goes here.
 
      $("#individual_view").toggleSlide();
@@ -179,22 +223,42 @@ function refresh(){
     _createRequest(INITIAL_BOARD, initBoard);
 }
 
-function _createRequest(path, callback, userToSearch=undefined){
+function _createRequest(path, callback=undefined, additionalArgs={}){
 
     const reqHeaders = {
         "extension-jwt": authorization.token
     };
-    
-    if(extraHeaders != undefined){
-        reqHeaders["userToSearch"] = userToSearch;
+    for(let arg in additionalArgs){
+        reqHeaders[arg] = additionalArgs[arg];
     }
 
-    $.ajax({
+    //TODO define error handler
+    const settings = {
         url: SERVER_DOMAIN + path,
         type: "GET",
         headers: reqHeaders
-        success: callback
-        //TODO define error handler
-    });
+    };
+    if(callback != undefined){
+        settings["success"] = callback;
+    }
 
+    $.ajax(settings);
+
+};
+
+/**
+ * Sets the global variable "name"
+ * @param {String} username The viewer's username
+ */
+function _setName(username){
+    name = username;
+}
+
+/**
+ * Converts seconds to hours.
+ * @param {Int} seconds Amount of seconds to convert.
+ * @return The number of hours from the amount of seconds given.
+ */
+function _secondsToHours(seconds){
+    return seconds / MINUTE / HOUR;
 }

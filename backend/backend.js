@@ -1,12 +1,9 @@
 /**
  * @fileoverview Backend for Viewer Analytics Twitch extension. Handles API
  * calls, database queries, viewer queries, and broadcaster configurations.
- * Dependencies:
- *      - jsdom
- *      - jQuery
- *      - [jsrsasign](https://github.com/kjur/jsrsasign)
  */
 
+const schedule = require("node-schedule");
 const jsrsasign = require("jsrsasign");
 const time = require("./TimeTracker");
 const sql = require("./SQLQuery");
@@ -30,10 +27,14 @@ const TimeTracker = time.TimeTracker;
 
 const trackers = {};
 const whitelisted = {};
+const daily = {};
+let shuttingDown = false;
 
 sql.startConnections();
 sql.createStreamerList();
 populateTrackers();
+updatePeriodically();
+schedule.scheduleJob(json.cronSettings, updateDays);
 
 const options = {
 
@@ -53,7 +54,28 @@ const server = https.createServer(options, function(req, res){
 
     }
 
-    if(req.method == "GET" && req.url == json.initBoard){
+    if(req.method == "GET" && req.url == json.getName){
+
+        if(checkJWT(req, res){ 
+    
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                    payloadObj;
+
+            $.ajax({
+
+                url: json.apiURL + "users?id=" + requestPayload["user_id"],
+                type: "GET",
+                headers:{
+                    "Client-ID": json.clientId
+                },
+                success: function(response){
+                    res.writeHead(200, headers);
+                    res.end(response["display_name"]);
+                },
+            });
+        }
+    }
+    else if(req.method == "GET" && req.url == json.initBoard){
 
         if(checkJWT(req, res){ 
 
@@ -64,6 +86,7 @@ const server = https.createServer(options, function(req, res){
             const channelId = requestPayload["channel_id"];
             if(!trackers.hasOwnProperty(channelId)){
                 trackers[channelId] = {};
+                daily[channelId] = {};
                 sql.updateStreamerList(channelId);
                 sql.addStreamerTable(channelId);
                 sql.createGraphTable(channelId);
@@ -89,10 +112,12 @@ const server = https.createServer(options, function(req, res){
                         sql.addViewer(channelId, response["id"], displayName);
                         sql.addViewerGraphTable(channelId, response["id"], 
                                 displayName);
+                        daily[channelId][displayName] = 0;
+
                     }
 
                     // Must go after if statement, otherwise viewer might never
-                    // get added.
+                    // get a tracker
                     trackers[channelId][displayName] = tracker;
                 },
 
@@ -117,20 +142,20 @@ const server = https.createServer(options, function(req, res){
             if(requestPayload.role == "broadcaster"){
                 
                 sql.swapViewer(requestPayload["channel_id"], 
-                        req.headers["userToToggle"], 
+                        req.headers["viewerQueriedFor"], 
                         req.headers["whitelisted"]);
 
-                if(trackers.hasProperty(req.headers["userToToggle"])){
+                if(trackers.hasProperty(req.headers["viewerQueriedFor"])){
 
-                    whitelisted[req.headers["userToToggle"]] = 
-                            trackers[req.headers["userToToggle"]];
-                    delete trackers[req.headers["userToToggle"]];
+                    whitelisted[req.headers["viewerQueriedFor"]] = 
+                            trackers[req.headers["viewerQueriedFor"]];
+                    delete trackers[req.headers["viewerQueriedFor"]];
                 }
                 else{
                     
-                    trakers[req.headers["userToToggle"]] = 
-                            trackers[req.headers["userToToggle"]];
-                    delete whitelisted[req.headers["userToToggle"]];
+                    trakers[req.headers["viewerQueriedFor"]] = 
+                            trackers[req.headers["viewerQueriedFor"]];
+                    delete whitelisted[req.headers["viewerQueriedFor"]];
 
                 }
 
@@ -147,17 +172,25 @@ const server = https.createServer(options, function(req, res){
     else if(req.method == "GET" && req.url == json.longStats){
 
         if(checkJWT(req, res)){
-            fetchLongTables(req["channelId"], res);
+
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                    payloadObj;
+
+            fetchLongTables(requestPayload["channel_id"], 
+                    requestPayload[""], res);
         }
     }
     else if(req.method == "GET" && req.url == json.userSearch){
 
         if(checkJWT(req, res)){
 
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                    payloadObj;
+
             const responsePayload = {};
             // This is super slow
-            for(let viewer in regular){
-                if(viewer.includes(name){
+            for(let viewer in regular[requestPayload["channel_id"]]){
+                if(viewer.includes(requestPayload["viewerQueriedFor"]){
                     responsePayload[viewer] = time;
                 }
             }
@@ -165,7 +198,100 @@ const server = https.createServer(options, function(req, res){
             res.end(responsePayload);
         }
     }
+    else if(req.method == "GET" && req.url == json.toggleTracker){
+        
+        if(checkJWT(req, res)){
+
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                    payloadObj;
+            const viewer = requestPayload["viewerQueriedFor"];
+
+            if(requestPayload["paused"] == false){
+
+                if(trackers.hasProperty(viewer)){
+                    trackers[viewer].unpauseTime();
+                }
+                else{
+                    whitelisted[viewer].unpauseTime();
+                }
+
+            }
+            else{
+               
+                if(trackers.hasProperty(viewer)){
+                    trackers[viewer].pauseTime();
+                }
+                else{
+                    whitelisted[viewer].pauseTime();
+
+            }
+        }
+    }
+
+    // Called when stream goes offline.
+    else if(req.method == "GET" && req.url == json.stopTracker){
+        
+        if(checkJWT(req, res)){
+
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                    payloadObj;
+            const channelId = requestPayload["channel_id"];
+            const channelTrack = trackers[channelId];
+            const whitelistTrack = whitelisted[channelId];
+
+            // TODO Maybe need to check if broadcaster first as well as 
+            // for other requests.
+            for(let viewer in trackers[channelId]){
+                daily[channelId][viewer] += channelTrack[viewer].dailyTime;
+                channelTrack[viewer].stopTime();
+                channelTrack[viewer] = undefined;
+            }
+            for(let viewer in whitelisted[channelId]){
+                daily[channelId][viewer] += whitelistTrack[viewer].dailyTime;
+                whitelistTrack[viewer].stopTime();
+                whitelistTrack[viewer] = undefined;
+            }
+        }
+    }
+
 }).listen(json.port);
+
+function updatePeriodically(){
+
+    const inter = setInterval(function(){
+
+        if(!shuttingDown){
+            sql.updateTime(trackers, whitelisted);
+        }
+        else{
+            clearInterval(inter);
+        }
+
+    }, updateTime);
+}
+
+function updateDays(){
+
+    for(let channel in days){
+
+        sql.updateGraphTable(channel, days[channel]);
+
+        for(let viewer in trackers[channel]){
+
+            if(trackers[channel][viewer] != undefined){
+                trackers[channel][viewer].dailyTime = 0;
+            }
+
+        }
+        for(let viewer in whitelisted[channel]){
+
+            if(whitelisted[channel][viewer] != undefined){
+                whitelisted[channel][viewer].dailyTime = 0;
+            }
+
+        }
+    }
+}
 
 function populateTrackers(){
     const streamers = [];
@@ -177,7 +303,7 @@ function populateTrackers(){
             clearInterval(inter);
         }
 
-    }, 1000);
+    }, json.oneSecond);
 }
 
 function checkJWT(req, res){
@@ -193,7 +319,8 @@ function checkJWT(req, res){
 }
 
 function killGracefully(){
-
+    
+    shuttingDown = true;
     sql.endConnections();
 
     server.close(function(){
