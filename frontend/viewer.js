@@ -12,6 +12,7 @@ const INITIAL_BOARD = "initBoard";
 const LONG_STATS = "longStats";
 const SEARCH_USER = "searchUser";
 const TOGGLE_TRACKER = "toggleTracker";
+const TOGGLE_WHITELIST = "toggleWhitelist";
 const MINUTE = 60;
 const HOUR = 60;
 const LEADERBOARD_INCREASE = 50;
@@ -59,6 +60,7 @@ window.Twitch.ext.onContext(function(cxt, changeArr){
 });
 
 $("#refresh").on("click", refresh);
+
 $("#search").submit(name, function(ev){
 
     _createRequest(SEARCH_USER, displayResults, {
@@ -93,13 +95,16 @@ $(window).on("scroll", function(){
         
         // Adds another 50 users to the leaderboard.
         for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE;
+
                 i++){
             
             let item = $("<button/>", {
             
                 text: `${i + 1}. ${viewers[i]}`,
                 click: function(){
-                    _createRequest(LONG_STATS, displayIndividual);
+                    _createRequest(LONG_STATS, displayIndividual, {
+                        "viewerQueriedFor": viewers[i]
+                    });
                 }
 
             });
@@ -135,7 +140,7 @@ function initBoard(res){
             text: `${i + 1}. ${viewers[i]}`,
             click: function(){
                 _createRequest(LONG_STATS, displayIndividual, {
-                    "viewerQueriedFor": viewer
+                    "viewerQueriedFor": viewers[i]
                 });
             }
 
@@ -170,16 +175,24 @@ function displayResults(res){
  * Displays leaderboard a given person's exhaustive watch statistics.
  * @param {ServerResponse} res Response payload from server containing the 
  *                         desired statistics.
+ * @param {String} status String describing the status of the request.
+ * @param {XMLHttpRequest} jqXHR XMLHttpRequest object used for reading
+ *                         response headers.
  */
-function displayIndividual(res){
+function displayIndividual(res, status, jqXHR){
 
     const longStats = res["longStats"][0];
     const graphStats = res["graphStats"][0];
 
     //temp format
-    const statsFormatted = $("<p/>", {
+    const statsFormatted = $("<div/>", {
         text: `Week: ${longStats["week"]}\nMonth: ${longStats["month"]}\n`
-                + `Year: ${longStats{"year"]}\nAll Time: ${longStats[all_time]}`
+                + `Year: ${longStats["year"]}\nAll Time: ${longStats[all_time]}`
+        id: "info_string"
+    });
+    const whitelistText = $("<div/>", {
+        text: "Whitelisted: "
+        id: "whitelist"
     });
     $("#individual_view").append(statsFormatted);
 
@@ -195,7 +208,7 @@ function displayIndividual(res){
         type: "line",
         data: {
             labels: dates,
-            datasets: {{
+            datasets: {
                 backgroundColor: "rgb(100, 65, 164)",
                 borderColor: "rgb(100, 65, 164)",
                 data: times
@@ -204,7 +217,23 @@ function displayIndividual(res){
         options: {}
         
     });
-    //TODO graphing code goes here.
+
+    if(jqXHR.getRequestHeader("broadcaster") == true){
+
+        const toggleWhitelist = $("<button/>", {
+            text: "Toggle Whitelist"
+            click: function(){
+                const userToToggle = jqXJR.getRequestHeader("viewerQueriedFor");
+                _createRequest(TOGGLE_WHITELIST, function(){
+                
+                const isWhitelisted = jqXJR.getRequestHeader("whitelisted");
+                $("#whitelist").text(`Whitelisted: ${}`);
+
+                }, {"viewerQueriedFor": userToToggle});
+            }
+
+        });
+    }
 
      $("#individual_view").toggleSlide();
 }

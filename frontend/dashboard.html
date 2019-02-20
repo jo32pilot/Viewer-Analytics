@@ -3,15 +3,16 @@
 
     <head>
 
-        <title>Dashboard Time Leaderboard</title>
+        <title>Broadcaster Time Leaderboard</title>
 
         <meta charset="UTF-8"></meta>
-        <meta name="description" content="Twitch extension that tracks viewer watch time"></meta>
+        <meta name="description" content="Broadcaster dashboard for twitch extension that tracks viewer watch time"></meta>
         <meta name="keywords" content="Twitch extension, Viewer analytics, Twitch leaderboard"></meta>
         <meta name="author" content="lito_john"></meta>
 
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
         <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+        <script src=https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js></script>
 
     </head>
 
@@ -21,8 +22,8 @@
                 <p align="center">Viewer Watch Time Leaderboard</p>
             </div>
 
-            <div>
-                <input type="text" id="search" placeholder="Search for a user...">
+            <div id="search_div">
+                <input type="text" id="search" placeholder="Search for a user">
             </div>
 
             <div>
@@ -41,12 +42,15 @@
             </div>
         </div>
 
-        <div id="individual_view">
+        <!-- Temporary inline css. Remove and add to external later. -->
+        <div id="individual_view" style="display:none;">
+            <canvas id="time_graph" width="400" height="400"></canvas>
+            <button id="whitelist">Toggle Whitelist</button>
             <button class="back"></button>
         </div>
 
     </body>
 
-        <script src="viewerfrontend.js"></script>
+    <script src="viewerfrontend.js"></script>
 
 </html>

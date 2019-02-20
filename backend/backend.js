@@ -28,13 +28,16 @@ const TimeTracker = time.TimeTracker;
 const trackers = {};
 const whitelisted = {};
 const daily = {};
-let shuttingDown = false;
+let accessToken = "";
+let refreshToken = "";
 
 sql.startConnections();
 sql.createStreamerList();
+getBearerToken();
 populateTrackers();
 updatePeriodically();
 schedule.scheduleJob(json.cronSettings, updateDays);
+schedule.scheduleJob(json.cronSettings, refreshBearerToken);
 
 const options = {
 
@@ -66,7 +69,8 @@ const server = https.createServer(options, function(req, res){
                 url: json.apiURL + "users?id=" + requestPayload["user_id"],
                 type: "GET",
                 headers:{
-                    "Client-ID": json.clientId
+                    "Authorization": `Bearer ${accessToken}`
+
                 },
                 success: function(response){
                     res.writeHead(200, headers);
@@ -78,8 +82,6 @@ const server = https.createServer(options, function(req, res){
     else if(req.method == "GET" && req.url == json.initBoard){
 
         if(checkJWT(req, res){ 
-
-            console.log("Processing request...");
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -97,7 +99,7 @@ const server = https.createServer(options, function(req, res){
                 url: json.apiURL + "users?id=" + requestPayload["user_id"],
                 type: "GET",
                 headers:{
-                    "Client-ID": json.clientId
+                    "Authorization": `Bearer ${accessToken}`
                 },
                 success: function(response){
 
@@ -176,8 +178,23 @@ const server = https.createServer(options, function(req, res){
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
 
+
+            if(trackers.hasProperty(req.headers["viewerQueriedFor"])){
+                res.setHeader("whitelisted", false);
+            }
+            else{
+                res.setHeader("whitelisted", true);
+            }
+            if(requestPayload["role"] == "broadcaster"){
+                res.setHeader("broadcaster", true);
+            }
+            else{
+                res.setHeader("broadcaster", false);
+            }
+            res.setHeader("viewerQueriedFor", req.headers["viewerQueriedFor"]);
+
             fetchLongTables(requestPayload["channel_id"], 
-                    requestPayload[""], res);
+                    req.headers["viewerQueriedFor"], res);
         }
     }
     else if(req.method == "GET" && req.url == json.userSearch){
@@ -239,6 +256,7 @@ const server = https.createServer(options, function(req, res){
             const channelTrack = trackers[channelId];
             const whitelistTrack = whitelisted[channelId];
 
+            sql.updateTime(trackers, whitelisted);
             // TODO Maybe need to check if broadcaster first as well as 
             // for other requests.
             for(let viewer in trackers[channelId]){
@@ -255,20 +273,6 @@ const server = https.createServer(options, function(req, res){
     }
 
 }).listen(json.port);
-
-function updatePeriodically(){
-
-    const inter = setInterval(function(){
-
-        if(!shuttingDown){
-            sql.updateTime(trackers, whitelisted);
-        }
-        else{
-            clearInterval(inter);
-        }
-
-    }, updateTime);
-}
 
 function updateDays(){
 
@@ -293,7 +297,69 @@ function updateDays(){
     }
 }
 
+function checkOnlineStreams(){
+    
+    // TODO Error check in updateTime function for possible deletion
+    // of tracker before update.
+    sql.updateTime(trackers, whitelisted);
+
+    // Gets results from "subtracting" the argument array
+    // from the called array.
+    Array.prototype.diff = function(array){
+        return this.filter(function(item){
+            return array.indexOf(item) < 0;
+        });
+    };
+
+    const checkStream = setInterval(function(){
+    
+        $.ajax({
+            type: "GET",
+            url : `${json.extensionURL}${json.extensionId}/`
+                    + `live_activated_channels`,
+            headers: {
+                "Client-Id": `${json.extensionId}`
+            },
+            success: function(res){
+
+                const live = [];
+                const allChannels = trackers.keys();
+                for(let channel of res["channels"]){
+                    live.push(channel["id"]);
+                }
+
+                const notLive = allChannels.diff(live);
+                const channelTrack = trackers[channelId];
+                const whitelistTrack = whitelisted[channelId];
+
+                for(let channelId of notLive){
+
+                    // TODO Maybe need to check if broadcaster first as well as
+                    // for other requests.
+                    for(let viewer in trackers[channelId]){
+                        daily[channelId][viewer] += 
+                                channelTrack[viewer].dailyTime;
+                        channelTrack[viewer].stopTime();
+                        channelTrack[viewer] = undefined;
+                    }
+                    for(let viewer in whitelisted[channelId]){
+                        daily[channelId][viewer] += 
+                                whitelistTrack[viewer].dailyTime;
+                        whitelistTrack[viewer].stopTime();
+                        whitelistTrack[viewer] = undefined;
+                    }
+
+                }
+
+            }
+
+        });
+
+    }, checkOnlineInterval);
+}
+
 function populateTrackers(){
+
     const streamers = [];
     sql.fetchStreamerList(streamers);
     const inter = setInterval(function(){
@@ -304,6 +370,34 @@ function populateTrackers(){
         }
 
     }, json.oneSecond);
+}
+
+function getBearerToken(){
+
+    $.ajax({
+        type: "POST",
+        url: `${json.tokenURL}client_id=${json.clientId}&`
+                + `client_secret=${json.clientSecret}&`
+                + `grant_type=client_credentials`
+        success: function(res){
+            accessToken = res["access_token"],
+            refreshToken = res["refresh_token"]
+        }
+    });
+}
+
+function refreshBearerToken(){
+
+    $.ajax({
+        type: "POST",
+        url: `${json.tokenRefreshURL}?grant_type=refresh_token&`
+                + `refresh_token=${refreshToken}&client_id=${json.clientId}&`
+                + `client_secret=${json.clientSecret}`
+        success: function(res){
+            accessToken = res["access_token"],
+            refreshToken = res["refresh_token"]
+        }
+    });
 }
 
 function checkJWT(req, res){
@@ -320,7 +414,6 @@ function checkJWT(req, res){
 
 function killGracefully(){
     
-    shuttingDown = true;
     sql.endConnections();
 
     server.close(function(){

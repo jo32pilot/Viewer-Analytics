@@ -152,7 +152,8 @@ function fetchLongTable(channelId, viewerUsername, res){
 
             responsePayload["graphStats"] = results;
 
-            // Send MySQL response to client.
+            // Send MySQL response to client
+            res.writeHead(200);.
             res.end(JSON.stringify(results)); 
 
         }
