@@ -27,8 +27,8 @@
    
     "extensionURL": "https://api.twitch.tv/extensions/",
     "apiURL": "https://api.twitch.tv/helix/",
-    "tokenURL": "https://id.twitch/oauth2/token?",
-    "tokenRefreshURL": "https://id.twitch/ouath2/token--data-urlencode?",
+    "tokenURL": "https://id.twitch.tv/oauth2/token?",
+    "tokenRefreshURL": "https://id.twitch.tv/oauth2/token--data-urlencode?",
     "alg": "YOUR_PREFERRED_ENCRYPTION_ALGORITHM_HERE",
     "jwtHeader": {
         "alg": "YOUR_PREFERRED_ENCRYPTION_ALGORITHM_HERE",
