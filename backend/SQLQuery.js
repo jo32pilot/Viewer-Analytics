@@ -153,10 +153,10 @@ function fetchLongTable(channelId, viewerUsername, res){
             responsePayload["graphStats"] = results;
 
             // Send MySQL response to client
-            res.writeHead(200);.
+            res.writeHead(200);
             res.end(JSON.stringify(results)); 
 
-        }
+        });
 
         aliveConnections--;
         connection.release();
@@ -294,13 +294,13 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
                 [removeFrom, viewerUsername], function(error){
         
             _assertError(error, connection);
-        }
+        });
 
         connection.query("INSERT INTO ? VALUES (?, ?, ?);", 
                 [viewerId, viewerUsername, times], function(error){
 
             _assertError(error, connection);
-        }
+        });
 
         connection.release();
         aliveConnections--;
@@ -384,7 +384,7 @@ function createGraphTable(channelId){
         if(err){
             throw res;
         }
-    }
+    });
 }
 
 function updateGraphTable(channelId, times){

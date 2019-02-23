@@ -35,7 +35,7 @@ sql.startConnections();
 sql.createStreamerList();
 getBearerToken();
 populateTrackers();
-updatePeriodically();
+checkOnlineStreams();
 schedule.scheduleJob(json.cronSettings, updateDays);
 schedule.scheduleJob(json.cronSettings, refreshBearerToken);
 
@@ -59,7 +59,7 @@ const server = https.createServer(options, function(req, res){
 
     if(req.method == "GET" && req.url == json.getName){
 
-        if(checkJWT(req, res){ 
+        if(checkJWT(req, res)){ 
     
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -81,7 +81,7 @@ const server = https.createServer(options, function(req, res){
     }
     else if(req.method == "GET" && req.url == json.initBoard){
 
-        if(checkJWT(req, res){ 
+        if(checkJWT(req, res)){ 
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -136,7 +136,7 @@ const server = https.createServer(options, function(req, res){
     }
     else if(req.method == "GET" && req.url == json.toggleWhitelist){
 
-        if(checkJWT(req, res){
+        if(checkJWT(req, res)){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -207,7 +207,7 @@ const server = https.createServer(options, function(req, res){
             const responsePayload = {};
             // This is super slow
             for(let viewer in regular[requestPayload["channel_id"]]){
-                if(viewer.includes(requestPayload["viewerQueriedFor"]){
+                if(viewer.includes(requestPayload["viewerQueriedFor"])){
                     responsePayload[viewer] = time;
                 }
             }
@@ -240,6 +240,7 @@ const server = https.createServer(options, function(req, res){
                 }
                 else{
                     whitelisted[viewer].pauseTime();
+                }
 
             }
         }
@@ -355,7 +356,7 @@ function checkOnlineStreams(){
 
         });
 
-    }, checkOnlineInterval);
+    }, json.checkOnlineInterval);
 }
 
 function populateTrackers(){
@@ -378,10 +379,13 @@ function getBearerToken(){
         type: "POST",
         url: `${json.tokenURL}client_id=${json.clientId}&`
                 + `client_secret=${json.clientSecret}&`
-                + `grant_type=client_credentials`
+                + `grant_type=client_credentials`,
         success: function(res){
             accessToken = res["access_token"],
             refreshToken = res["refresh_token"]
+        },
+        error: function(err){
+            console.log(err);
         }
     });
 }
@@ -390,9 +394,9 @@ function refreshBearerToken(){
 
     $.ajax({
         type: "POST",
-        url: `${json.tokenRefreshURL}?grant_type=refresh_token&`
+        url: `${json.tokenRefreshURL}grant_type=refresh_token&`
                 + `refresh_token=${refreshToken}&client_id=${json.clientId}&`
-                + `client_secret=${json.clientSecret}`
+                + `client_secret=${json.clientSecret}`,
         success: function(res){
             accessToken = res["access_token"],
             refreshToken = res["refresh_token"]
