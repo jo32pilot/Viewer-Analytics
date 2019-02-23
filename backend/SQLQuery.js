@@ -11,6 +11,7 @@ module.exports = {
     startConnections: startConnections,
     fetchTables: fetchTables,
     fetchLongTable: fetchLongTable,
+    fetchPeriodTimes: fetchPeriodTimes,
     addStreamerTable: addStreamerTable,
     addViewer: addViewer,
     swapViewer: swapViewer,
@@ -153,7 +154,7 @@ function fetchLongTable(channelId, viewerUsername, res){
             responsePayload["graphStats"] = results;
 
             // Send MySQL response to client
-            res.writeHead(200);
+            res.writeHead(200, json.headers);
             res.end(JSON.stringify(results)); 
 
         });
@@ -161,6 +162,37 @@ function fetchLongTable(channelId, viewerUsername, res){
         aliveConnections--;
         connection.release();
     });
+}
+
+/**
+ * Gets a specfied the list of accumulated times for any given period other
+ * than the current session.
+ * @param {String} channelId Channel to get viewer times for.
+ * @param {String} period Period of time in which users accumulated time.
+ *                 (e.g. week, year)
+ * @param {ServerResponse} res Response object to send data back to client.
+ */
+function fetchPeriodTimes(channelId, period, res){
+ 
+    const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
+    const graphTable = sql.raw(channelId + _GRAPH_SUFFIX);
+    aliveConnections++;
+
+    pool.query("SELECT username, ? from ?;", [period, regTable], 
+            function(err, results, fields){
+
+        if(err){
+            aliveConnections--;
+            res.writeHead(json.badRequest);
+            res.end();
+            throw err;
+        }
+
+        res.writeHead(json.success, json.headers);
+        res.end(JSON.stringify(results));
+
+    });
+
 }
 
 /**

@@ -134,6 +134,25 @@ const server = https.createServer(options, function(req, res){
 
         }
     }
+    else if(req.method == "GET" && req.url == json.getPeriod){
+
+        if(checkJWT(req, res)){
+
+            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
+                    payloadObj;
+
+            if(req["period"] == "session"){
+                res.writeHead(200, headers);
+                res.end(JSON.stringify(trackers[requestPayload["channel_id"]));
+            }
+            else{
+                sql.fetchPeriodTimes(requestPayload["channel_id"], 
+                        req["period"], res);
+            }
+
+        }
+
+    }
     else if(req.method == "GET" && req.url == json.toggleWhitelist){
 
         if(checkJWT(req, res)){
@@ -161,7 +180,7 @@ const server = https.createServer(options, function(req, res){
 
                 }
 
-                res.writeHead(200);
+                res.writeHead(200, headers);
                 res.end();
                 
             }
@@ -212,7 +231,7 @@ const server = https.createServer(options, function(req, res){
                 }
             }
             res.writeHead(200, headers);
-            res.end(responsePayload);
+            res.end(JSON.stringify(responsePayload));
         }
     }
     else if(req.method == "GET" && req.url == json.toggleTracker){

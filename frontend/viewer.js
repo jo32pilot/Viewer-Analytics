@@ -10,6 +10,7 @@ const SERVER_DOMAIN = "https://localhost:48091/";
 const GET_NAME = "getName";
 const INITIAL_BOARD = "initBoard";
 const LONG_STATS = "longStats";
+const GET_PERIOD = "getPeriod";
 const SEARCH_USER = "searchUser";
 const TOGGLE_TRACKER = "toggleTracker";
 const TOGGLE_WHITELIST = "toggleWhitelist";
@@ -24,7 +25,7 @@ let authorization = undefined;
 let viewers = undefined;
 let savedBoard = undefined;
 let paused = false;
-let currentDisplay = LEADERBOARD_INCREASE;
+let currentDisplay = 0;
 
 //---------- FUNCTIONS / EVENT LISTENERS ----------//
 
@@ -61,9 +62,17 @@ window.Twitch.ext.onContext(function(cxt, changeArr){
 
 $("#refresh").on("click", refresh);
 
+$(".tabtimes").on("click", function(ev){
+
+    _createRequest(GET_PERIOD, initBoard, additionalArgs={
+        "period": this.id
+    }),
+
+}
+
 $("#search").submit(name, function(ev){
 
-    _createRequest(SEARCH_USER, displayResults, {
+    _createRequest(SEARCH_USER, displayResults, additionalArgs={
         "viewerQueriedFor": name
     });
 
@@ -94,60 +103,35 @@ $(window).on("scroll", function(){
     if((scrollHeight - scrollPosition) / scrollHeight == 0){
         
         // Adds another 50 users to the leaderboard.
-        for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE;
+        _initButtons();
 
-                i++){
-            
-            let item = $("<button/>", {
-            
-                text: `${i + 1}. ${viewers[i]}`,
-                click: function(){
-                    _createRequest(LONG_STATS, displayIndividual, {
-                        "viewerQueriedFor": viewers[i]
-                    });
-                }
-
-            });
-            
-            $("leaderboard").append(item);
-        }
-
-        currentDisplay += LEADERBOARD_INCREASE;
     }
 });
 
 
 /**
  * Populates board and global variables for the first time.
+ * @param {ServerResponse} res Response payload from server containing
+ *                         the accumulated times of the viewers.
  */
 function initBoard(res){
 
+    $("#leaderboard").empty();
+    currentDisplay = 0;
     viewers = []
+
+    res = JSON.parse(res);
 
     for (let user in res){
         viewers.push([user, res[user]]);
     }
 
     viewers.sort(function(a, b){
-        return a[1] - b[1];
+        return a[1].time - b[1].timr;
     });
 
+    _initButtons();
     
-    for(let i = 0; i < currentDisplay; i++){
-
-        let item = $("<button/>", {
-        
-            text: `${i + 1}. ${viewers[i]}`,
-            click: function(){
-                _createRequest(LONG_STATS, displayIndividual, {
-                    "viewerQueriedFor": viewers[i]
-                });
-            }
-
-        });
-        
-        $("#board").append(item);
-    }
 }
 
 /**
@@ -181,6 +165,7 @@ function displayResults(res){
  */
 function displayIndividual(res, status, jqXHR){
 
+    res = JSON.parse(res);
     const longStats = res["longStats"][0];
     const graphStats = res["graphStats"][0];
 
@@ -250,6 +235,33 @@ function refresh(){
     }
 
     _createRequest(INITIAL_BOARD, initBoard);
+}
+
+/**
+ * Initializes user list as list of buttons and displays them.
+ */
+function _initButtons(){
+
+    for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE; 
+            i++){
+
+        let item = $("<button/>", {
+        
+            text: `${i + 1}. ${viewers[i]}`,
+            click: function(){
+                _createRequest(LONG_STATS, displayIndividual, {
+                    "viewerQueriedFor": viewers[i]
+                });
+            }
+
+        });
+        
+        $("#leaderboard").append(item);
+
+    }
+
+    currentDisplay += LEADERBOARD_INCREASE;
+
 }
 
 function _createRequest(path, callback=undefined, additionalArgs={}){
