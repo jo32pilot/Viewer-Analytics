@@ -340,15 +340,15 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
 }
 
 /**
- * Creates table to store list of streamer channel ids. Used for ease
+ * Creates table to store list of channel ids. Used for ease
  * of access of channel ids when restarting server if ever needed.
  */
 function createStreamerList(){
 
     aliveConnections++;
 
-    pool.query("CREATE TABLE list_of_streamers(channel_id VARCHAR(50), " + 
-            "PRIMARY KEY(channel_id));", function(error){
+    pool.query("CREATE TABLE list_of_streamers(channel_id VARCHAR(50), "
+            + "PRIMARY KEY(channel_id));", function(error){
         
         aliveConnections--;
 
@@ -359,15 +359,17 @@ function createStreamerList(){
 }
 
 /**
- * Updates list of channel ids with a new channel id.
+ * Updates list of channel ids with a new channel.
  * @param {String} channelId Unique id of streamer's channel to add.
  */
 function updateStreamerList(channelId){
 
     aliveConnections++;
 
-    pool.query("INSERT INTO list_of_streamers VALUES (?);", [channelId],
-            function(error){
+    const query = "INSERT INTO list_of_streamers VALUES (?);";
+    const args = [channelId];
+
+    pool.query(query, args, function(error){ 
    
         aliveConnections--;
 
@@ -378,14 +380,15 @@ function updateStreamerList(channelId){
 }
 
 /**
- * Gets all streamers' channel ids.
- * @param {Array} toPopulate Array to populate streamer channel ids with.
+ * Gets all streamers' channel ids to be used for some callback.
+ * @param {Function} callback Action to perform after getting streamers.
+ * @param {...args} args Additional arguments to be used for the callback.
  */
-function fetchStreamerList(toPopulate){
+function fetchStreamerList(callback, ...args){
 
     aliveConnections++;
 
-    pool.query("SELECT * FROM list_of_streamers;", 
+    pool.query("SELECT channel_id FROM list_of_streamers;",
             function(error, results, fields){
 
         aliveConnections--;
@@ -393,12 +396,14 @@ function fetchStreamerList(toPopulate){
         if(error){
             throw error;
         }
-     
-        for(let row of results){
-            
-            toPopulate.push(row["channel_id"]);
 
+        const toPopulate = [];
+        for(let row of results){
+            toPopulate.push(row["channel_id"]);
         }
+
+        callback(toPopulate, ...args);
+
     });
 }
 

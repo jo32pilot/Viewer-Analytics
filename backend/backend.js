@@ -6,7 +6,9 @@
 const schedule = require("node-schedule");
 const jsrsasign = require("jsrsasign");
 const time = require("./TimeTracker");
+const qs = require("querystring");
 const sql = require("./SQLQuery");
+const crypto = require("crypto");
 const https = require("https");
 const fs = require("fs");
 
@@ -34,10 +36,12 @@ let refreshToken = "";
 sql.startConnections();
 sql.createStreamerList();
 getBearerToken();
-populateTrackers();
+sql.fetchStreamerList(sql.fetchTables, trackers, whitelisted);
+sql.fetchStreamerList(multiStreamWebhook);
 checkOnlineStreams();
 schedule.scheduleJob(json.cronSettings, updateDays);
 schedule.scheduleJob(json.cronSettings, refreshBearerToken);
+//TODO schedule cron for week, months, years? Or manually.
 
 const options = {
 
@@ -104,6 +108,15 @@ const server = https.createServer(options, function(req, res){
                 success: function(response){
 
                     if(requestPayload["role"] == "broadcaster"){
+
+                        if(!response["id"] in trackers){
+
+                            singleStreamWebhook(response["id"]);
+
+                        }
+
+                        // Then we return because we don't want the streamer
+                        // to accumulate time as well.
                         return;
                     }
 
@@ -265,30 +278,69 @@ const server = https.createServer(options, function(req, res){
         }
     }
 
-    // Called when stream goes offline.
+    // To verify the webhook subscription
     else if(req.method == "GET" && req.url == json.stopTracker){
-        
-        if(checkJWT(req, res)){
 
-            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
-                    payloadObj;
-            const channelId = requestPayload["channel_id"];
-            const channelTrack = trackers[channelId];
-            const whitelistTrack = whitelisted[channelId];
+        const token = queryParamreq.url.split(json.verificationDelimiter);
 
-            sql.updateTime(trackers, whitelisted);
-            // TODO Maybe need to check if broadcaster first as well as 
-            // for other requests.
-            for(let viewer in trackers[channelId]){
-                daily[channelId][viewer] += channelTrack[viewer].dailyTime;
-                channelTrack[viewer].stopTime();
-                channelTrack[viewer] = undefined;
+        // Token will always be at the end of the query string.
+        token = token[token.length];
+        res.writeHead(200, token);
+        res.end();
+
+    }
+    // Called when stream goes offline.
+    else if(req.method == "POST" && req.url == json.stopTracker){
+
+        res.writeHead(json.success);
+        res.end();
+
+        // Verify that request is from twitch webhook subscription
+        const incoming = req.headers["x-hub-signature"].
+                split(json.verificationDelimiter);
+
+        const hash = crypto.createHmac(incoming[0], json.clintSecret).
+                update(JSON.stringify(req.body)).
+                digest("hex");
+
+        if(incoming[1] == hash){
+
+            let body = "";
+            request.on("data", function(data){
+                body += data;
+
+                if(body.length > 1e6){
+                    request.connection.destroy();
+                }
             }
-            for(let viewer in whitelisted[channelId]){
-                daily[channelId][viewer] += whitelistTrack[viewer].dailyTime;
-                whitelistTrack[viewer].stopTime();
-                whitelistTrack[viewer] = undefined;
-            }
+
+            request.on("end", function(){
+
+                const data = qs.parse(body);
+
+                // user_id is apparently the same as channel_id. Wish I'd known
+                // that earlier.
+                const channelId = data["user_id"];
+                const channelTrack = trackers[channelId];
+                const whitelistTrack = whitelisted[channelId];
+
+                sql.updateTime(trackers, whitelisted);
+                // TODO Maybe need to check if broadcaster first as well as 
+                // for other requests.
+                for(let viewer in trackers[channelId]){
+                    daily[channelId][viewer] += channelTrack[viewer].dailyTime;
+                    channelTrack[viewer].stopTime();
+                    channelTrack[viewer] = undefined;
+                }
+                for(let viewer in whitelisted[channelId]){
+                    daily[channelId][viewer] += whitelistTrack[viewer].dailyTime;
+                    whitelistTrack[viewer].stopTime();
+                    whitelistTrack[viewer] = undefined;
+                }
+
+            });
+                
+
         }
     }
 
@@ -317,88 +369,56 @@ function updateDays(){
     }
 }
 
-function checkOnlineStreams(){
-    
-    // TODO Error check in updateTime function for possible deletion
-    // of tracker before update.
-    sql.updateTime(trackers, whitelisted);
+/**
+ * Subscribes to broadcast changes for the specified broadcaster. If
+ * the broadcaster goes offline, handles deletion of trackers.
+ * @param {String} broadcasterId Unique of of broadcaster to monitor.
+ */
+function singleStreamWebhook(broadcasterId){
 
-    // Gets results from "subtracting" the argument array
-    // from the called array.
-    Array.prototype.diff = function(array){
-        return this.filter(function(item){
-            return array.indexOf(item) < 0;
-        });
-    };
-
-    const checkStream = setInterval(function(){
-    
-        $.ajax({
-            type: "GET",
-            url : `${json.extensionURL}${json.extensionId}/`
-                    + `live_activated_channels`,
-            headers: {
-                "Client-Id": `${json.extensionId}`
-            },
-            success: function(res){
-
-                const live = [];
-                const allChannels = trackers.keys();
-                for(let channel of res["channels"]){
-                    live.push(channel["id"]);
-                }
-
-                const notLive = allChannels.diff(live);
-                const channelTrack = trackers[channelId];
-                const whitelistTrack = whitelisted[channelId];
-
-                for(let channelId of notLive){
-
-                    // TODO Maybe need to check if broadcaster first as well as
-                    // for other requests.
-                    for(let viewer in trackers[channelId]){
-                        daily[channelId][viewer] += 
-                                channelTrack[viewer].dailyTime;
-                        channelTrack[viewer].stopTime();
-                        channelTrack[viewer] = undefined;
-                    }
-                    for(let viewer in whitelisted[channelId]){
-                        daily[channelId][viewer] += 
-                                whitelistTrack[viewer].dailyTime;
-                        whitelistTrack[viewer].stopTime();
-                        whitelistTrack[viewer] = undefined;
-                    }
-
-                }
-
-            }
-
-        });
-
-    }, json.checkOnlineInterval);
+    $.ajax({
+        type: "POST",
+        url: json.webhookURL,
+        data: {
+            hub.callback: json.webServerURL + json.stopTracker,
+            hub.mode: "subscribe",
+            hub.topic: json.streamTopicURL + broadcasterId,
+            //TODO after testing define webhook expiration
+            hub.secret: json.secret
+        }
+        error: function(err){
+            // TODO log this
+            console.log(err);
+        }
+    });
 }
 
-function populateTrackers(){
+/**
+ * Subscribes to broadcast changes for all specified broadcasters. If
+ * the broadcaster goes offline, handles deletion of trackers.
+ * @param {Array} broadcasterId Array of broadcasters ids.
+ */
+function multiStreamWebhook(broadcasterIds){
 
-    const streamers = [];
-    sql.fetchStreamerList(streamers);
-    const inter = setInterval(function(){
+    for(let streamer of broadcasterIds){
 
-        if(streamers != []){
-            sql.fetchTables(streamers, trackers, whitelisted);
-            clearInterval(inter);
-        }
+        singleStreamWebhook(streamer);
+        streamerIds.push(streamer);
 
-    }, json.oneSecond);
+    }
+
 }
 
 function getBearerToken(){
 
     $.ajax({
         type: "POST",
-        url: `${json.tokenURL}client_id=${json.clientId}&`
-                + `client_secret=${json.clientSecret}&`
-                + `grant_type=client_credentials`,
+        url: json.tokenURL,
+        data: {
+            "client_id": json.clientId,
+            "client_secret": json.clientSecret,
+            "grant_type" = "client_credentials"
+        },
         success: function(res){
             accessToken = res["access_token"],
             refreshToken = res["refresh_token"]
@@ -413,9 +433,13 @@ function refreshBearerToken(){
 
     $.ajax({
         type: "POST",
-        url: `${json.tokenRefreshURL}grant_type=refresh_token&`
-                + `refresh_token=${refreshToken}&client_id=${json.clientId}&`
-                + `client_secret=${json.clientSecret}`,
+        url: `${json.tokenRefreshURL},
+        data: {
+            "grant_type": "refresh_token",
+            "refresh_token": refreshToken,
+            "client_id": json.clientId,
+            "client_secret": json.clientSecret
+        },
         success: function(res){
             accessToken = res["access_token"],
             refreshToken = res["refresh_token"]
