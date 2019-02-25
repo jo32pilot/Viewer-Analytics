@@ -28,11 +28,11 @@ const json = require(JSON_PATH);
 const jwt = jsrsasign.KJUR.jws.JWS;
 const TimeTracker = time.TimeTracker;
 
-const trackers = {};
-const whitelisted = {};
-const daily = {};
-let accessToken = "";
-let refreshToken = "";
+const trackers = {};        // Session TimeTrackers for non-whitelisted viewers
+const whitelisted = {};     // Session TimeTrackers for whitelisted viewers
+const daily = {};           // Tracks daily watch times for graphs
+let accessToken = "";       // Bearer token for increase API call rates
+let refreshToken = "";      // Token to refresh accessToken when needed
 
 // Settup logging
 log4js.configure({
@@ -40,8 +40,8 @@ log4js.configure({
         everything: {
             type: "file", 
             filename: "server.log",
-            maxLogSize: json.maxBytes,
-            backups: json.maxBackups
+            maxLogSize: json.maxBytes, // Size of file in bytes before backup
+            backups: json.maxBackups   // Number of backups created
         }
     },
     categories:{
@@ -59,7 +59,11 @@ getBearerToken();
 sql.fetchStreamerList(sql.fetchTables, trackers, whitelisted);
 sql.fetchStreamerList(multiStreamWebhook);
 checkOnlineStreams();
+
+// Cron schedule to update SQL days table for graph
 schedule.scheduleJob(json.cronSettings, updateDays);
+
+// Cron schedule to refresh bearerToken
 schedule.scheduleJob(json.cronSettings, refreshBearerToken);
 //TODO schedule cron for week, months, years? Or manually.
 
@@ -70,10 +74,12 @@ const options = {
 
 };
 
+// Begin init server
 const server = https.createServer(options, function(req, res){
 
     const headers = json.headers;
 
+    // CORS preflight request handler
     if(req.method == "OPTIONS"){
 
         res.writeHead(200, headers);
@@ -81,40 +87,20 @@ const server = https.createServer(options, function(req, res){
 
     }
 
-    if(req.method == "GET" && req.url == json.getName){
-
-        if(checkJWT(req, res)){ 
-    
-            const requestPayload = jwt.parse(req.headers["extension-jwt"]).
-                    payloadObj;
-
-            $.ajax({
-
-                url: json.apiURL + "users?id=" + requestPayload["user_id"],
-                type: "GET",
-                headers:{
-                    "Authorization": `Bearer ${accessToken}`
-
-                },
-                success: function(response){
-                    res.writeHead(json.success, headers);
-                    res.end(response["display_name"]);
-                },
-                error: function(jqXHR, textStatus, errThrown){
-                    res.writeHead(json.badRequest);
-                    res.end();
-                    logger.info(textStatus);
-                }
-            });
-        }
-    }
-    else if(req.method == "GET" && req.url == json.initBoard){
+    // Called when initializing board for the first time. Fetches session data
+    // for viewer.
+    if(req.method == "GET" && req.url == json.initBoard){
 
         if(checkJWT(req, res)){ 
 
+            // Parse JWT payload
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
+
             const channelId = requestPayload["channel_id"];
+
+            // If the channel isn't in trackers, create tables and places
+            // to store the channel's data
             if(!trackers.hasOwnProperty(channelId)){
                 trackers[channelId] = {};
                 daily[channelId] = {};
@@ -122,7 +108,8 @@ const server = https.createServer(options, function(req, res){
                 sql.addStreamerTable(channelId);
                 sql.createGraphTable(channelId);
             }
-            
+          
+            // Twitch API call to GET user display name
             $.ajax({
 
                 url: json.apiURL + "users?id=" + requestPayload["user_id"],
@@ -131,7 +118,11 @@ const server = https.createServer(options, function(req, res){
                     "Authorization": `Bearer ${accessToken}`
                 },
                 success: function(response){
-
+    
+                    // If the user is a streamer and their id (which is also
+                    // their channel id) can't be found, that means
+                    // we haven't subscribed to the webhook for their channel
+                    // changes. So do that.
                     if(requestPayload["role"] == "broadcaster"){
 
                         if(!response["id"] in trackers){
@@ -148,6 +139,8 @@ const server = https.createServer(options, function(req, res){
                     const displayName = response["display_name"];
                     const tracker = new TimeTracker(displayName);
 
+                    // If viewer can't be found in the channel's trackers, add
+                    // them to it and the SQL tables.
                     if(!trackers[channelId].hasOwnProperty(displayName)){
                         sql.addViewer(channelId, response["id"], displayName);
                         sql.addViewerGraphTable(channelId, response["id"], 
@@ -159,7 +152,11 @@ const server = https.createServer(options, function(req, res){
                     // Must go after if statement, otherwise viewer might never
                     // get a tracker
                     trackers[channelId][displayName] = tracker;
+                    res.setHeader("name", displayName);
                 },
+
+                // Log request failures. Standard procedure for the rest of the
+                // error handlers in thie file.
                 error: function(jqXHR, textStatus, errThrown){
                     res.writeHead(json.badRequest);
                     res.end();
@@ -172,6 +169,8 @@ const server = https.createServer(options, function(req, res){
 
         }
     }
+
+    // GET the time period of which the client wants to see. (e.g. week, year)
     else if(req.method == "GET" && req.url == json.getPeriod){
 
         if(checkJWT(req, res)){
@@ -179,10 +178,13 @@ const server = https.createServer(options, function(req, res){
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
 
+            // For current session, just send the trackers.
             if(req["period"] == "session"){
                 res.writeHead(200, headers);
                 res.end(JSON.stringify(trackers[requestPayload["channel_id"]));
             }
+
+            // Otherwise, request other periods from MySQL server.
             else{
                 sql.fetchPeriodTimes(requestPayload["channel_id"], 
                         req["period"], res);
@@ -191,6 +193,11 @@ const server = https.createServer(options, function(req, res){
         }
 
     }
+
+    // toggleWhitelist for viewer. That is, stop showing them on the
+    // leaderboard. Bit of a misnomer. Probably should have called it 
+    // blacklist instead as whitelisting entails granting some sort
+    // of privilege, but I guess it can be seen as both. 
     else if(req.method == "GET" && req.url == json.toggleWhitelist){
 
         if(checkJWT(req, res)){
@@ -198,14 +205,17 @@ const server = https.createServer(options, function(req, res){
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
 
+            // Only allow this request if the streamer is making it.
             if(requestPayload.role == "broadcaster"){
                 
                 const response = undefined;
 
+                // Swap tables for the viewer on the MySQL server.
                 sql.swapViewer(requestPayload["channel_id"], 
                         req.headers["viewerQueriedFor"], 
                         req.headers["whitelisted"]);
 
+                // If user wan't whitelisted before, whitelist them now
                 if(trackers.hasProperty(req.headers["viewerQueriedFor"])){
 
                     whitelisted[req.headers["viewerQueriedFor"]] = 
@@ -213,6 +223,8 @@ const server = https.createServer(options, function(req, res){
                     delete trackers[req.headers["viewerQueriedFor"]];
                     response = "True";
                 }
+
+                // If user was whitelisted, unwhitelist them
                 else{
                     
                     trakers[req.headers["viewerQueriedFor"]] = 
@@ -222,10 +234,15 @@ const server = https.createServer(options, function(req, res){
 
                 }
 
+                // "response" is sent for the client to change the whitelisted
+                // staus text.
                 res.writeHead(200, headers);
                 res.end(response);
                 
             }
+
+            // Someone other than the broadcaster attempted to make this
+            // request.
             else{
                 res.writeHead(json.forbidden);
                 res.end();
@@ -233,7 +250,19 @@ const server = https.createServer(options, function(req, res){
                         + `${req["headers"]}`);
             }
         }
+
+        // Either someone other than the broadcaster attempted to make this
+        // request, or something went wrong.
+        else{
+            res.writeHead(json.forbidden);
+            res.end();
+            logger.warn(`Illegal attempt - toggleWhitelist: `
+                    + `${req["headers"]}`);
+
+        }
     }
+
+    // GET all periods of time for the user specified.
     else if(req.method == "GET" && req.url == json.longStats){
 
         if(checkJWT(req, res)){
@@ -241,24 +270,34 @@ const server = https.createServer(options, function(req, res){
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
 
-
+            // Checks whether or not user was whitlisted.
             if(trackers.hasProperty(req.headers["viewerQueriedFor"])){
                 res.setHeader("whitelisted", "False");
             }
             else{
                 res.setHeader("whitelisted", "True");
             }
+
+            // We check to see if the user was a broadcaster. If they are
+            // tell the client so it can display a button for the streamer
+            // to toggle whitelist for the viewer being queried for.
             if(requestPayload["role"] == "broadcaster"){
                 res.setHeader("broadcaster", true);
             }
             else{
                 res.setHeader("broadcaster", false);
             }
+
+            // Send back who was being queried for. (Redundant? Maybe. But it
+            // makes the client code look slightly cleaner for various reasons.)
             res.setHeader("viewerQueriedFor", req.headers["viewerQueriedFor"]);
 
-            fetchLongTables(requestPayload["channel_id"], 
+            sql.fetchLongTables(requestPayload["channel_id"], 
                     req.headers["viewerQueriedFor"], res);
         }
+
+        // Request was not made with a JWT signed by Twitch or something like
+        // that. Probably.
         else{
             res.writeHead(json.forbidden);
             res.end();
@@ -266,6 +305,8 @@ const server = https.createServer(options, function(req, res){
                     + `${req["headers"]}`);
         }
     }
+
+    // GET all users with usernames that contain the name queried for.
     else if(req.method == "GET" && req.url == json.userSearch){
 
         if(checkJWT(req, res)){
@@ -274,7 +315,11 @@ const server = https.createServer(options, function(req, res){
                     payloadObj;
 
             const responsePayload = {};
-            // This is super slow
+
+            // This is super slow. Like, m*n slow where m is the length
+            // of the names and n is the amount of names. Don't know that
+            // time complexity of includes though. There's probably a better
+            // way the search for matching names.
             for(let viewer in regular[requestPayload["channel_id"]]){
                 if(viewer.includes(requestPayload["viewerQueriedFor"])){
                     responsePayload[viewer] = time;
@@ -289,6 +334,8 @@ const server = https.createServer(options, function(req, res){
             logger.info(`Illegal attempt - userSearch: req["headers"]`);
         }
     }
+
+    // Pauses or unpauses time accumulation for specified viewer.
     else if(req.method == "GET" && req.url == json.toggleTracker){
         
         if(checkJWT(req, res)){
@@ -297,6 +344,7 @@ const server = https.createServer(options, function(req, res){
                     payloadObj;
             const viewer = requestPayload["viewerQueriedFor"];
 
+            // Viewer unpaused the stream. Start accumulating time again.
             if(requestPayload["paused"] == false){
 
                 if(trackers.hasProperty(viewer)){
@@ -307,6 +355,8 @@ const server = https.createServer(options, function(req, res){
                 }
 
             }
+
+            // User paused the stream. Stop accumulating time.
             else{
                
                 if(trackers.hasProperty(viewer)){
@@ -336,9 +386,13 @@ const server = https.createServer(options, function(req, res){
         res.end();
 
     }
-    // Called when stream goes offline.
+
+    // Called when stream goes offline. Request comes from Twitch webhook 
+    // subscription. Or it should, at least.
     else if(req.method == "POST" && req.url == json.stopTracker){
 
+        // Twitch specified to respond with a success immediatley when 
+        // request is retrieved.
         res.writeHead(json.success);
         res.end();
 
@@ -352,10 +406,13 @@ const server = https.createServer(options, function(req, res){
 
         if(incoming[1] == hash){
 
+            // Parse POST data
             let body = "";
             request.on("data", function(data){
                 body += data;
 
+                // Either something went wrong or someone is attempting
+                // to overflow the server.
                 if(body.length > 1e6){
                     logger.fatal(`Overflow attempt - stopTracker: `
                             + `ORIGIN: ${req["Origin"]}`);
@@ -363,8 +420,10 @@ const server = https.createServer(options, function(req, res){
                 }
             }
 
+            // Once all data has been collected.
             request.on("end", function(){
 
+                // Parse query string into object format.
                 const data = qs.parse(body);
 
                 // user_id is apparently the same as channel_id. Wish I'd known
@@ -373,9 +432,12 @@ const server = https.createServer(options, function(req, res){
                 const channelTrack = trackers[channelId];
                 const whitelistTrack = whitelisted[channelId];
 
+                // update all appropriate times from trackers and whitelisted
+                // in the broadcaster's SQL tables.
                 sql.updateTime(trackers, whitelisted);
-                // TODO Maybe need to check if broadcaster first as well as 
-                // for other requests.
+
+                // Update daily times which will be added to the MySQL server
+                // at the end of the day. Then remove references to trackers.
                 for(let viewer in trackers[channelId]){
                     daily[channelId][viewer] += channelTrack[viewer].dailyTime;
                     channelTrack[viewer].stopTime();
@@ -390,10 +452,15 @@ const server = https.createServer(options, function(req, res){
             });
         }
 
-        logger.warn(`Illegal attempt - stopTracker: req["headers"]`);
+        // Request probably wasn't from Twitch.
+        else{
+            logger.warn(`Illegal attempt - stopTracker: req["headers"]`);
+        }
     }
 
 }).listen(json.port);
+
+/* End of server definition */
 
 function updateDays(){
 

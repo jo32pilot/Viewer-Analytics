@@ -9,7 +9,6 @@
 const DARK_MODE = "darkmode.css";
 const LIGHT_MODE = "lightmode.css";
 const SERVER_DOMAIN = "https://localhost:48091/";
-const GET_NAME = "getName";
 const INITIAL_BOARD = "initBoard";
 const LONG_STATS = "longStats";
 const GET_PERIOD = "getPeriod";
@@ -42,7 +41,6 @@ window.Twitch.ext.onAuthorized(function(auth){
     
     authorization = auth;
 
-    _createRequest(GET_NAME, _setName);
     _createRequest(INITIAL_BOARD, initBoard);
 
     //TODO Get rid of this line
@@ -92,10 +90,10 @@ $(".tabtimes").on("click", function(ev){
     period = this.id;
 });
 
-$("#search").submit(name, function(ev){
+$("#search").submit(nameQuery, function(ev){
 
     _createRequest(SEARCH_USER, displayResults, additionalArgs={
-        "viewerQueriedFor": name
+        "viewerQueriedFor": nameQuery
     });
 
 });
@@ -137,8 +135,9 @@ $(window).on("scroll", function(){
  * @param {ServerResponse} res Response payload from server containing
  *                         the accumulated times of the viewers.
  */
-function initBoard(res){
+function initBoard(res, status, jqXHR){
 
+    _setName(jqXHR.getRequestHeader("name"));
     $("#leaderboard").empty();
     currentDisplay = 0;
     viewers = []
