@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
 
     <head>
@@ -10,6 +10,7 @@
         <meta name="keywords" content="Twitch extension, Viewer analytics, Twitch leaderboard"></meta>
         <meta name="author" content="lito_john"></meta>
 
+        <link rel="stylesheet" href="darkmode.css">
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
         <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js"></script>
@@ -18,38 +19,33 @@
 
     <body>
         <div id=list_view>
-            <div>
-                <p align="center">Viewer Watch Time Leaderboard</p>
+            <div id="title">
+                <p>Viewer Watch Time Leaderboard</p>
             </div>
 
             <div id="search_div">
-                <input type="text" id="search" placeholder="Search for a user">
-            </div>
-
-            <div>
-                <button id="refresh">Refresh</button>
+                <input type="text" id="search" placeholder="Search for a user" spellcheck="false" autocomplete="off">
+                <button class="search_div_buttons" id="refresh">Refresh</button>
             </div>
 
             <div id="tabs">
-                <button class="tabtimes" id="all_time">Overall</button>
-                <button class="tabtimes" id="year">Year</button>
-                <button class="tabtimes" id="month">Month</button>
-                <button class="tabtimes" id="week">Week</button>
                 <button class="tabtimes" id="session">Session</button>
+                <button class="tabtimes" id="week">Week</button>
+                <button class="tabtimes" id="month">Month</button>
+                <button class="tabtimes" id="year">Year</button>
+                <button class="tabtimes" id="all_time">Overall</button>
             </div>
 
             <div id="leaderboard">
             </div>
         </div>
 
-        <!-- Temporary inline css. Remove and add to external later. -->
-        <div id="individual_view" style="display:none;">
-            <canvas id="time_graph" width="400" height="400"></canvas>
-            <button class="back"></button>
+        <div id="individual_view">
+            <canvas id="time_graph"></canvas>
         </div>
 
     </body>
 
-    <script src="viewerfrontend.js"></script>
+    <script src="frontend.js"></script>
 
 </html>

@@ -14,8 +14,9 @@ const GET_PERIOD = "getPeriod";
 const SEARCH_USER = "searchUser";
 const TOGGLE_TRACKER = "toggleTracker";
 const TOGGLE_WHITELIST = "toggleWhitelist";
+const ACTIVE = "active";
+const SECONDS = 60;
 const MINUTE = 60;
-const HOUR = 60;
 const LEADERBOARD_INCREASE = 50;
 
 //---------- SETTUP ----------//
@@ -25,13 +26,15 @@ let authorization = undefined;
 let viewers = undefined;
 let savedBoard = undefined;
 let paused = false;
+let period = "session";
 let currentDisplay = 0;
+$("#" + period).addClass(ACTIVE);
 
 //---------- FUNCTIONS / EVENT LISTENERS ----------//
 
 //TODO check if name is undefined for some functions
 
-window.ext.actions.requestIdShare();
+window.Twitch.ext.actions.requestIdShare();
 
 window.Twitch.ext.onAuthorized(function(auth){
     
@@ -64,11 +67,22 @@ $("#refresh").on("click", refresh);
 
 $(".tabtimes").on("click", function(ev){
 
+    $(".tabtimes").each(function(){
+
+        if(period == this.id){
+            $(this).removeClass(ACTIVE);
+        }
+
+    });
+
+    $(this).addClass(ACTIVE);
+
     _createRequest(GET_PERIOD, initBoard, additionalArgs={
         "period": this.id
     }),
 
-}
+    period = this.id;
+});
 
 $("#search").submit(name, function(ev){
 
@@ -77,6 +91,7 @@ $("#search").submit(name, function(ev){
     });
 
 });
+
 $(window).on("popstate", function(ev){
 
     if(savedBoard != undefined){
@@ -123,11 +138,11 @@ function initBoard(res){
     res = JSON.parse(res);
 
     for (let user in res){
-        viewers.push([user, res[user]]);
+        viewers.push([user, res[user].time]);
     }
 
     viewers.sort(function(a, b){
-        return a[1].time - b[1].timr;
+        return a[1] - b[1];
     });
 
     _initButtons();
@@ -145,14 +160,20 @@ function displayResults(res){
     history.pushState({}, "");
     $("#leaderboard").empty();
     initBoard(res);
-    //TODO animate in the back button. But for now...
     const back = $("<button/>", {
+        id: "leave_search",
         text: "back",
         click: function(){
+            $(this).addClass("hide_button");
+            $("#refresh").removeClass("hide_button");
+            $("#search").removeClass("search_bar_move");
             history.back();
         }
     });
-    $("#search_div").append(back);
+    back.addClass("search_div_buttons");
+    $("#refresh").addClass("hide_button");
+    $("#search").addClass("search_bar_move");
+    $("#search_div").prepend(back);
 }
 
 /**
@@ -168,15 +189,16 @@ function displayIndividual(res, status, jqXHR){
     res = JSON.parse(res);
     const longStats = res["longStats"][0];
     const graphStats = res["graphStats"][0];
+    const isWhitelisted = jqXJR.getRequestHeader("whitelisted");
 
     //temp format
     const statsFormatted = $("<div/>", {
         text: `Week: ${longStats["week"]}\nMonth: ${longStats["month"]}\n`
-                + `Year: ${longStats["year"]}\nAll Time: ${longStats[all_time]}`
+                + `Year: ${longStats["year"]}\nOverall: ${longStats[all_time]}`,
         id: "info_string"
     });
     const whitelistText = $("<div/>", {
-        text: "Whitelisted: "
+        text: `Whitelisted: ${isWhitelisted}`,
         id: "whitelist"
     });
     $("#individual_view").append(statsFormatted);
@@ -197,7 +219,7 @@ function displayIndividual(res, status, jqXHR){
                 backgroundColor: "rgb(100, 65, 164)",
                 borderColor: "rgb(100, 65, 164)",
                 data: times
-            }],
+            },
         },
         options: {}
         
@@ -206,21 +228,23 @@ function displayIndividual(res, status, jqXHR){
     if(jqXHR.getRequestHeader("broadcaster") == true){
 
         const toggleWhitelist = $("<button/>", {
-            text: "Toggle Whitelist"
+            text: "Toggle Whitelist",
             click: function(){
                 const userToToggle = jqXJR.getRequestHeader("viewerQueriedFor");
-                _createRequest(TOGGLE_WHITELIST, function(){
+                _createRequest(TOGGLE_WHITELIST, function(res){
                 
-                const isWhitelisted = jqXJR.getRequestHeader("whitelisted");
-                $("#whitelist").text(`Whitelisted: ${}`);
+                    $("#whitelist").text(`Whitelisted: ${res}`);
 
                 }, {"viewerQueriedFor": userToToggle});
             }
 
         });
+
+        $("#individual_view").append(toggleWhitelist);
+
     }
 
-     $("#individual_view").toggleSlide();
+    $("#individual_view").toggleSlide();
 }
 
 
@@ -234,7 +258,9 @@ function refresh(){
         console.log("Authorization undefined.");
     }
 
-    _createRequest(INITIAL_BOARD, initBoard);
+    _createRequest(GET_PERIOD, initBoard, additionalArgs={
+        "period": period
+    });
 }
 
 /**
@@ -247,15 +273,21 @@ function _initButtons(){
 
         let item = $("<button/>", {
         
-            text: `${i + 1}. ${viewers[i]}`,
+            id: `${viewers[i][0]}`,
+            cls: "list",
             click: function(){
                 _createRequest(LONG_STATS, displayIndividual, {
-                    "viewerQueriedFor": viewers[i]
+                    "viewerQueriedFor": viewers[i][0]
                 });
             }
 
         });
-        
+
+        let displayTime = _secondsToFormat(viewers[i][1]);
+        $(`#${viewers[i][0]}`).html(`<span class='order_align'>${i + 1}  `
+                + `${viewers[i][0]}</span><span class='time_align'>`
+                + `${displayTime}</span>`);
+
         $("#leaderboard").append(item);
 
     }
@@ -298,8 +330,21 @@ function _setName(username){
 /**
  * Converts seconds to hours.
  * @param {Int} seconds Amount of seconds to convert.
- * @return The number of hours from the amount of seconds given.
+ * @return the number of hours from the amount of seconds given.
  */
 function _secondsToHours(seconds){
-    return seconds / MINUTE / HOUR;
+    return seconds / SECONDS / MINUTES;
+}
+
+/**
+ * Converts seconds to hh:mm:ss format.
+ * @param {Int} time Amount of seconds to convert.
+ * @return the converted time in the specified format.
+ */
+function _secondsToFormat(time){
+    const seconds = time % SECONDS;
+    const minutes = ((time - seconds) / SECONDS) % MINUTES;
+    const hours = (time - (minutes * MINUTES) - seconds) / SECONDS / MINUTES;
+    return `${hours}:${minutes}:${seconds}`
+
 }

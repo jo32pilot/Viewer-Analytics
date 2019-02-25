@@ -1,0 +1,135 @@
+body {
+    background-color: #201c2b;
+    color: #e5e3e8;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+#title {
+    /* 3/4 * width of iframe (318) = 119.25*/
+    left: calc(50% - 119.25px);
+    position: fixed;
+}
+
+/* Search functionality */
+
+#search_div {
+    background-color: #2e2a38;
+    color: inherit;
+    height: 23px;
+    left: calc(50% - 159px);
+    position: fixed;
+    top: 8%;
+    width: 318px;
+}
+
+#search {
+    background-color: inherit;
+    border: 0;
+    color: inherit;
+    outline: 0;
+    transition: left .5s ease;
+    width: 243px;
+}
+
+.search_bar_move {
+    left: calc(50% - 84px);
+}
+
+/* Style for buttons around the search bar */
+
+.search_div_buttons {
+    background-color: #363144;
+    height: 23px;
+    overflow: hidden;
+    padding: 0;
+    transition: background-color .5s ease, width .5s ease;
+    width: 75px;
+}
+
+.hide_button {
+    width: 0;
+}
+
+/* Refresh leaderboard button */
+
+#refresh {
+    float: right;
+}
+
+/* Return to regular list from search */
+
+#leave_search {
+    float: left;
+}
+
+/* Leaderboard */
+
+.list {
+    background-color: inherit;
+
+    /* Box shadw creates a line under each element */
+    box-shadow: 0 -1px 0 #1b1823;
+    color: inherit;
+    height: 25px;
+    width: 318px;
+}
+
+.order_align {
+    text-align: left;
+}
+
+.time_align {
+    text-align: right;
+}
+
+
+/* Period tabs  */
+
+#tabs {
+    background-color: #363144;
+    bottom: 0;
+    height: 40px;
+    left: calc(50% - 159px);
+    position: fixed;
+    width: 318px;
+}
+
+.tabtimes {
+    background-color: inherit;
+    float: left;
+    height: 40px;
+    width: 63.6px;
+}
+
+/* Buttons in general */
+
+button {
+    border: 0;
+    color: inherit;
+    outline: 0;
+    transition: background-color .5s ease;
+}
+
+button:hover {
+    background-color: #2b253a;
+    cursor: pointer;
+}
+
+button:active {
+    background-color: #262230;
+    cursor: pointer;
+}
+
+.active {
+    background-color: #262230;
+    cursor: pointer;
+}
+
+/* Individual view */
+
+#individual_view {
+    display: none;
+    height: 200px;
+    left: calc(50% - 159px);
+    width: 318px;
+}

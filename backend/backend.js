@@ -175,6 +175,8 @@ const server = https.createServer(options, function(req, res){
 
             if(requestPayload.role == "broadcaster"){
                 
+                const response = undefined;
+
                 sql.swapViewer(requestPayload["channel_id"], 
                         req.headers["viewerQueriedFor"], 
                         req.headers["whitelisted"]);
@@ -184,17 +186,19 @@ const server = https.createServer(options, function(req, res){
                     whitelisted[req.headers["viewerQueriedFor"]] = 
                             trackers[req.headers["viewerQueriedFor"]];
                     delete trackers[req.headers["viewerQueriedFor"]];
+                    response = "True";
                 }
                 else{
                     
                     trakers[req.headers["viewerQueriedFor"]] = 
                             trackers[req.headers["viewerQueriedFor"]];
                     delete whitelisted[req.headers["viewerQueriedFor"]];
+                    response = "False";
 
                 }
 
                 res.writeHead(200, headers);
-                res.end();
+                res.end(response);
                 
             }
             else{
@@ -212,10 +216,10 @@ const server = https.createServer(options, function(req, res){
 
 
             if(trackers.hasProperty(req.headers["viewerQueriedFor"])){
-                res.setHeader("whitelisted", false);
+                res.setHeader("whitelisted", "False");
             }
             else{
-                res.setHeader("whitelisted", true);
+                res.setHeader("whitelisted", "True");
             }
             if(requestPayload["role"] == "broadcaster"){
                 res.setHeader("broadcaster", true);
