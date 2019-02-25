@@ -6,6 +6,8 @@
 
 //---------- CONSTANTS ----------//
 
+const DARK_MODE = "darkmode.css";
+const LIGHT_MODE = "lightmode.css";
 const SERVER_DOMAIN = "https://localhost:48091/";
 const GET_NAME = "getName";
 const INITIAL_BOARD = "initBoard";
@@ -59,6 +61,12 @@ window.Twitch.ext.onContext(function(cxt, changeArr){
         _createRequest(TOGGLE_TRACKER, additionalArgs={
             "paused": true
         });
+    }
+    if(changeArr["theme"] == "light"){
+        $("#css").attr("href", LIGHT_MODE);
+    }
+    else if(changeArr["theme"] == "dark"){
+        $("#css").attr("href", DARK_MODE);
     }
     console.log("onContext fired");
 });

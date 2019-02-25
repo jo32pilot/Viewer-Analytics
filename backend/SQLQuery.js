@@ -29,6 +29,25 @@ const _REGULAR_SUFFIX = "R";
 const _WHITELIST_SUFFIX = "WS";
 const _GRAPH_SUFFIX = "G";
 
+// Settup logging
+log4js.configure({
+    appenders: {
+        everything: {
+            type: "file", 
+            filename: "SQL.log",
+            maxLogSize: json.maxBytes,
+            backups: json.maxBackups
+        }
+    },
+    categories:{
+        server: {
+            appenders: ["everything"],
+            level: "info"
+        }
+    }
+});
+const logger = log4js.getLogger();
+
 let pool = undefined; //Connection pool to MySQL server
 
 let aliveConnections = 0; // Int denoting number of unreleased connections.
@@ -68,9 +87,8 @@ function fetchTables(streams, regular, whitelisted){
     pool.getConnection(function(err, connection){
 
         // If error occurs, connection doesn't exist, so no need to release.
-        if(err){
-            aliveConnections--;
-            throw err;
+        if(_assertConnection(err)){
+            return
         }
 
         for(let stream of streams){
@@ -130,10 +148,7 @@ function fetchLongTable(channelId, viewerUsername, res){
 
     pool.getConnection(function(err, connection){
     
-        if(err){
-            aliveConnections--;
-            throw err;
-        }
+        _assertConnection(err);
 
         const responsePayload = {}
         connection.query("SELECT username, week, month, year, all_time FROM ? "
@@ -185,7 +200,7 @@ function fetchPeriodTimes(channelId, period, res){
             aliveConnections--;
             res.writeHead(json.badRequest);
             res.end();
-            throw err;
+            logger.error(`Failed to query with pool: ${err.message}`);
         }
 
         res.writeHead(json.success, json.headers);
@@ -210,10 +225,7 @@ function addStreamerTable(channelId){
 
     pool.getConnection(function(err, connection){
 
-        if(err){
-            aliveConnections--;
-            throw err;
-        }
+        _assertConnection(err);
         
         // Create table which stores viewer accumulated times.
         connection.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
@@ -276,8 +288,7 @@ function addViewer(channelId, viewerId, viewerUsername, times=[0, 0, 0, 0],
         aliveConnections--;
 
         if(error){
-            throw error;
-            //log this
+            logger.error(`Failed to query with pool: ${err.message}`);
         }
     });
 }
@@ -308,7 +319,9 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
     aliveConnections++;
     
     pool.getConnection(function(err, connection){
-        
+       
+        _assertConnection(err);
+
         const times = [];
         let viewerId = undefined;
         connection.query("SELECT * FROM ? WHERE viewerUsername=?;",
@@ -590,6 +603,17 @@ function _assertError(err, connection){
         }
         catch(error){
         }
-        throw err;
-    };
+        logger.error(`Failed to query with connection: ${err.message});
+        return true;
+    }
+    return false;
+}
+
+function _assertConnection(err){
+    if(err){
+        aliveConnections--;
+        logger.error(`Could not establish connection: ${err.message}`);
+        return true;
+    }
+    return false;
 }

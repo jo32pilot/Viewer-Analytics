@@ -1,5 +1,5 @@
 # TODO
 - Error Check
 - Add Logging
-- Add CSS
+- Make sql return true / false to determine if they worked. Then handle
 - Change all http codes from constants to json constants

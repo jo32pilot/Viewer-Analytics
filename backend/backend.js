@@ -8,6 +8,7 @@ const jsrsasign = require("jsrsasign");
 const time = require("./TimeTracker");
 const qs = require("querystring");
 const sql = require("./SQLQuery");
+const log4js = require("log4js");
 const crypto = require("crypto");
 const https = require("https");
 const fs = require("fs");
@@ -32,6 +33,25 @@ const whitelisted = {};
 const daily = {};
 let accessToken = "";
 let refreshToken = "";
+
+// Settup logging
+log4js.configure({
+    appenders: {
+        everything: {
+            type: "file", 
+            filename: "server.log",
+            maxLogSize: json.maxBytes,
+            backups: json.maxBackups
+        }
+    },
+    categories:{
+        server: {
+            appenders: ["everything"],
+            level: "info"
+        }
+    }
+});
+const logger = log4js.getLogger();
 
 sql.startConnections();
 sql.createStreamerList();
@@ -77,9 +97,14 @@ const server = https.createServer(options, function(req, res){
 
                 },
                 success: function(response){
-                    res.writeHead(200, headers);
+                    res.writeHead(json.success, headers);
                     res.end(response["display_name"]);
                 },
+                error: function(jqXHR, textStatus, errThrown){
+                    res.writeHead(json.badRequest);
+                    res.end();
+                    logger.info(textStatus);
+                }
             });
         }
     }
@@ -135,10 +160,10 @@ const server = https.createServer(options, function(req, res){
                     // get a tracker
                     trackers[channelId][displayName] = tracker;
                 },
-
-                // TODO redefine
-                error: function(){
-                    console.log("User probably doesn't exist.");
+                error: function(jqXHR, textStatus, errThrown){
+                    res.writeHead(json.badRequest);
+                    res.end();
+                    logger.info(textStatus);
                 }
             });
 
@@ -202,8 +227,10 @@ const server = https.createServer(options, function(req, res){
                 
             }
             else{
-                res.writeHead(400);
+                res.writeHead(json.forbidden);
                 res.end();
+                logger.warn(`Illegal attempt - toggleWhitelist: `
+                        + `${req["headers"]}`);
             }
         }
     }
@@ -232,6 +259,12 @@ const server = https.createServer(options, function(req, res){
             fetchLongTables(requestPayload["channel_id"], 
                     req.headers["viewerQueriedFor"], res);
         }
+        else{
+            res.writeHead(json.forbidden);
+            res.end();
+            loggger.info(`Illegal attempt - fetchLongStats: `
+                    + `${req["headers"]}`);
+        }
     }
     else if(req.method == "GET" && req.url == json.userSearch){
 
@@ -249,6 +282,11 @@ const server = https.createServer(options, function(req, res){
             }
             res.writeHead(200, headers);
             res.end(JSON.stringify(responsePayload));
+        }
+        else{
+            res.writeHead(json.forbidden);
+            res.end();
+            logger.info(`Illegal attempt - userSearch: req["headers"]`);
         }
     }
     else if(req.method == "GET" && req.url == json.toggleTracker){
@@ -280,6 +318,11 @@ const server = https.createServer(options, function(req, res){
 
             }
         }
+        else{
+            res.writeHead(json.forbidden);
+            res.end();
+            logger.info(`Illegal attempt - toggleTracker: req["headers"]`);
+        }
     }
 
     // To verify the webhook subscription
@@ -289,7 +332,7 @@ const server = https.createServer(options, function(req, res){
 
         // Token will always be at the end of the query string.
         token = token[token.length];
-        res.writeHead(200, token);
+        res.writeHead(json.success, token);
         res.end();
 
     }
@@ -314,6 +357,8 @@ const server = https.createServer(options, function(req, res){
                 body += data;
 
                 if(body.length > 1e6){
+                    logger.fatal(`Overflow attempt - stopTracker: `
+                            + `ORIGIN: ${req["Origin"]}`);
                     request.connection.destroy();
                 }
             }
@@ -343,9 +388,9 @@ const server = https.createServer(options, function(req, res){
                 }
 
             });
-                
-
         }
+
+        logger.warn(`Illegal attempt - stopTracker: req["headers"]`);
     }
 
 }).listen(json.port);
@@ -390,9 +435,9 @@ function singleStreamWebhook(broadcasterId){
             //TODO after testing define webhook expiration
             hub.secret: json.secret
         }
-        error: function(err){
-            // TODO log this
-            console.log(err);
+        error: function(jsXHR, textStatus, err){
+            logger.error(`Failed attempt - webhookSubscribe %s: `
+                    + `${textStatus}`);
         }
     });
 }
@@ -427,8 +472,8 @@ function getBearerToken(){
             accessToken = res["access_token"],
             refreshToken = res["refresh_token"]
         },
-        error: function(err){
-            console.log(err);
+        error: function(jsXJR, textStatus, err){
+            logger.error(`Failed attempt - getBearerToken: ${textStatus}`);
         }
     });
 }
@@ -448,6 +493,9 @@ function refreshBearerToken(){
             accessToken = res["access_token"],
             refreshToken = res["refresh_token"]
         }
+        error: function(jsXHR, textStatus, err){
+            logger.error(`Failed attempt - refreshBearerToken: ${textStatus}`);
+        }
     });
 }
 
@@ -465,6 +513,8 @@ function checkJWT(req, res){
 
 function killGracefully(){
     
+    logger.shutdown(function(){});
+
     sql.endConnections();
 
     server.close(function(){
