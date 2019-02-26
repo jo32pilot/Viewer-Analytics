@@ -1,54 +1,61 @@
 {
-    "secret": "YOUR_EXTENSION_SECRET_HERE",
-    "extensionId": "YOUR_EXTENSION_CLIENT_ID_HERE",
-    "clientId": "YOUR_API_CLIENT_ID_HERE",
+    "secret": "YOUR_SECRET_HERE",
+    "extensionId": "YOUR_EXTENSION_ID_HERE",
+    "clientId": "YOUR_CLIENT_ID_HERE",
     "clientSecret": "YOUR_CLIENT_SECRET_HERE",
-    "myId": "lito_john",
+    "myId": "YOUR_ID_HERE",
 
-    "certPath": "../conf/public.pem",
-    "keyPath": "../conf/private.pem",
+    "certPath": "YOUR_CERT_PATH_HERE",
+    "keyPath": "YOUR_KEY_PATH_HERE",
 
     "headers": {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "extension-jwt, viewerQueriedFor, whitelisted, paused",
+        "Access-Control-Allow-Headers": "extension-jwt, viewerQueriedFor, whitelisted, paused, period, x-hub-signature",
         "Access-Control-Max-age": 600
     },
 
-    "port": 8000,
+    "port": "8000",
 
     "getName": "/getName",
     "initBoard": "/initBoard",
+    "getPeriod": "/getPeriod",
     "toggleWhitelist": "/toggleWhitelist",
     "longStats": "/longStats",
     "userSearch":"/userSearch",
     "toggleTracker": "/toggleTracker",
     "stopTracker": "/stopTracker",
-   
+  
+    "webserverURL": "https://vieweranalytics.me",
     "extensionURL": "https://api.twitch.tv/extensions/",
     "apiURL": "https://api.twitch.tv/helix/",
-    "tokenURL": "https://id.twitch.tv/oauth2/token?",
-    "tokenRefreshURL": "https://id.twitch.tv/oauth2/token--data-urlencode?",
+    "webhookURL": "https://api.twitch.tv/helix/webhooks/hub",
+    "streamTopicURL": "https://api.twitch.tv/helix/streams?user_id=",
+    "tokenURL": "https://id.twitch.tv/oauth2/token",
+    "tokenRefreshURL": "https://id.twitch.tv/oauth2/token--data-urlencode",
     "alg": "YOUR_PREFERRED_ENCRYPTION_ALGORITHM_HERE",
-    "jwtHeader": {
-        "alg": "YOUR_PREFERRED_ENCRYPTION_ALGORITHM_HERE",
-        "typ": "jwt"
-    },
-    "expirationTime": 600,
-    "payloadRole": "external",
 
     "limit": 100,
     "SQLHost": "localhost",
     "SQLUser": "root",
-    "SQLPassword": "YOUR_MYSQL_PASSWORD_HERE",
+    "SQLPassword": "YOUR_SQL_PASSWORD_HERE",
     "database": "YOUR_DATABASE_HERE",
 
+    "subscriptionExpiration": 864000,
     "updateTime": 1800000,
     "oneSecond": 1000,
-    "checkOnlineInterval": "300000",
+
+    "success": 200,
+    "badRequest": 400,
+    "forbidden": 403,
 
     "cronSettings": "0 0 * * *",
 
-    "tableExists": "ER_TABLE_EXISTS_ERROR: Table 'list_of_streamers' already exists"
+    "tableExists": "ER_TABLE_EXISTS_ERROR: Table 'list_of_streamers' already exists",
 
+    "verificationDelimiter": "=",
+    "pathDelimiter": "/",
+
+    "maxBytes": 25000000,
+    "maxBackups": 3
 }

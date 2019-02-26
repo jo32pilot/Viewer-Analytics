@@ -68,20 +68,22 @@ log4js.configure({
 const logger = log4js.getLogger();
 
 
-sql.startConnections();
-sql.createStreamerList();
+if(sql.startConnections()){
+    logger.shutdown(function(){});
+    process.exit(0);
+}
+
+_assertInitSQLErr(sql.createStreamerList());
 getBearerToken();
-sql.fetchStreamerList(sql.fetchTables, trackers, whitelisted);
-sql.fetchStreamerList(multiStreamWebhook);
-checkOnlineStreams();
+_assertInitSQLErr(sql.fetchStreamerList(sql.fetchTables, trackers, 
+        whitelisted));
+_assertInitSQLErr(sql.fetchStreamerList(multiStreamWebhook));
 
 // Cron schedule to update SQL days table for graph
 schedule.scheduleJob(json.cronSettings, updateDays);
 
 // Cron schedule to refresh bearerToken
 schedule.scheduleJob(json.cronSettings, refreshBearerToken);
-//TODO schedule cron for week, months, years? Or manually.
-
 
 const options = {
 
@@ -100,7 +102,7 @@ const server = https.createServer(options, function(req, res){
     // CORS preflight request handler
     if(req.method == "OPTIONS"){
 
-        res.writeHead(200, headers);
+        res.writeHead(json.success, headers);
         res.end();
 
     }
@@ -182,7 +184,7 @@ const server = https.createServer(options, function(req, res){
                 }
             });
 
-            res.writeHead(200, headers);
+            res.writeHead(json.success, headers);
             res.end(JSON.stringify(trackers[channelId]));
 
         }
@@ -198,7 +200,7 @@ const server = https.createServer(options, function(req, res){
 
             // For current session, just send the trackers.
             if(req["period"] == "session"){
-                res.writeHead(200, headers);
+                res.writeHead(json.success, headers);
                 res.end(JSON.stringify(trackers[requestPayload["channel_id"]));
             }
 
@@ -254,7 +256,7 @@ const server = https.createServer(options, function(req, res){
 
                 // "response" is sent for the client to change the whitelisted
                 // staus text.
-                res.writeHead(200, headers);
+                res.writeHead(json.success, headers);
                 res.end(response);
                 
             }
@@ -343,7 +345,7 @@ const server = https.createServer(options, function(req, res){
                     responsePayload[viewer] = time;
                 }
             }
-            res.writeHead(200, headers);
+            res.writeHead(json.success, headers);
             res.end(JSON.stringify(responsePayload));
         }
         else{
@@ -406,8 +408,10 @@ const server = https.createServer(options, function(req, res){
     }
 
     // Called when stream goes offline. Request comes from Twitch webhook 
-    // subscription. Or it should, at least.
-    else if(req.method == "POST" && req.url == json.stopTracker){
+    // subscription. Or it should, at least. There really ever is only
+    // one post request and that's from Twitch so we'll leave this as is.
+    else if(req.method == "POST"){
+
 
         // Twitch specified to respond with a success immediatley when 
         // request is retrieved.
@@ -438,6 +442,9 @@ const server = https.createServer(options, function(req, res){
                 }
             }
 
+            // Get user id
+            const urlSplit = req.url.split(json.pathDelimiter);
+
             // Once all data has been collected.
             request.on("end", function(){
 
@@ -452,7 +459,7 @@ const server = https.createServer(options, function(req, res){
 
                 // user_id is apparently the same as channel_id. Wish I'd known
                 // that earlier.
-                const channelId = data["user_id"];
+                const channelId = urlSplit[1];
                 const channelTrack = trackers[channelId];
                 const whitelistTrack = whitelisted[channelId];
 
@@ -535,12 +542,11 @@ function singleStreamWebhook(broadcasterId){
         type: "POST",
         url: json.webhookURL,
         data: {
-            hub.callback: json.webServerURL + json.stopTracker,
+            hub.callback: `${json.webServerURL}${json.stopTracker}`
+                    + `${broadcasterId}`,
             hub.mode: "subscribe",
             hub.topic: json.streamTopicURL + broadcasterId,
-
-            //TODO after testing define webhook expiration
-
+            hub.lease_seconds: json.subscriptionExpiration,
             hub.secret: json.secret
         },
         error: function(jsXHR, textStatus, err){
@@ -603,7 +609,7 @@ function refreshBearerToken(){
 
     $.ajax({
         type: "POST",
-        url: `${json.tokenRefreshURL},
+        url: `${json.tokenRefreshURL}`,
         data: {
             "grant_type": "refresh_token",
             "refresh_token": refreshToken,
@@ -635,11 +641,24 @@ function _checkJWT(req, res){
     if(!jwt.verifyJWT(req.headers["extension-jwt"],
             {"b64": json.secret}, {alg: [json.alg]})){
             
-        res.writeHead(400);
+        res.writeHead(json.forbidden);
         res.end();
         return false;
     }
     return true;
+}
+
+/**
+ * Checks if sql set up functions near top of file had an error occurr.
+ * Handles accordingly.
+ * @param {boolean} isErr True if error occurred, false otherwise.
+ */
+function _assertInitSQLErr(isErr){
+    if(isErr){
+        logger.shutdown(function(){});
+        sql.endConnections();
+        process.exit(0);
+    }
 }
 
 /**
