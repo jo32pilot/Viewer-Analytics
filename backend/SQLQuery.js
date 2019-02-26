@@ -5,6 +5,7 @@
  */
 
 const sql = require("mysql");
+const log4js = require("log4js");
 const json = require("./config.json");
 
 module.exports = {
@@ -59,13 +60,13 @@ log4js.configure({
         }
     },
     categories:{
-        server: {
+        default: {
             appenders: ["everything"],
             level: "info"
         }
     }
 });
-const logger = log4js.getLogger();
+const logger = log4js.getLogger("SQL");
 
 
 let pool = undefined;     //Connection pool to MySQL server
@@ -623,7 +624,7 @@ function updateGraphTable(channelId, times){
 
     pool.getConnection(function(err, connection){
 
-        if(_assertConnectionError(err){
+        if(_assertConnectionError(err)){
             toReturn = true;
             return;
         }
@@ -808,6 +809,8 @@ function endConnections(){
             pool.end(function(err){
 
                 clearInterval(wait);
+
+                log4js.shutdown(function(){});
                 
                 if(err){
                     logger.error(error.message);
@@ -839,7 +842,7 @@ function _assertError(err, connection, res=undefined){
             res.writeHead(json.badRequest);
             res.end();
         }
-        logger.error(`Failed to query with connection: ${err.message});
+        logger.error(`Failed to query with connection: ${err.message}`);
         return true;
     }
     return false;

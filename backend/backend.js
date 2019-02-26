@@ -43,7 +43,6 @@ const /** !Object<string, <string, !TimeTracker>> */ whitelisted = {};
 // Tracks daily watch times for graphs.
 const /** !Object<string, <string, !TimeTracker>> */ daily = {};
 
-
 let accessToken = "";       // Bearer token for increase API call rates
 let refreshToken = "";      // Token to refresh accessToken when needed
 
@@ -59,17 +58,17 @@ log4js.configure({
         }
     },
     categories:{
-        server: {
+        default: {
             appenders: ["everything"],
             level: "info"
         }
     }
 });
-const logger = log4js.getLogger();
+const logger = log4js.getLogger("Server");
 
 
 if(sql.startConnections()){
-    logger.shutdown(function(){});
+    log4js.shutdown(function(){});
     process.exit(0);
 }
 
@@ -180,7 +179,7 @@ const server = https.createServer(options, function(req, res){
                 error: function(jqXHR, textStatus, errThrown){
                     res.writeHead(json.badRequest);
                     res.end();
-                    logger.info(textStatus);
+                    logger.info(errThrown);
                 }
             });
 
@@ -201,7 +200,7 @@ const server = https.createServer(options, function(req, res){
             // For current session, just send the trackers.
             if(req["period"] == "session"){
                 res.writeHead(json.success, headers);
-                res.end(JSON.stringify(trackers[requestPayload["channel_id"]));
+                res.end(JSON.stringify(trackers[requestPayload["channel_id"]]));
             }
 
             // Otherwise, request other periods from MySQL server.
@@ -422,7 +421,7 @@ const server = https.createServer(options, function(req, res){
         const incoming = req.headers["x-hub-signature"].
                 split(json.verificationDelimiter);
 
-        const hash = crypto.createHmac(incoming[0], json.clintSecret).
+        const hash = crypto.createHmac(incoming[0], json.personalSecret).
                 update(JSON.stringify(req.body)).
                 digest("hex");
 
@@ -440,7 +439,7 @@ const server = https.createServer(options, function(req, res){
                             + `ORIGIN: ${req["Origin"]}`);
                     request.connection.destroy();
                 }
-            }
+            });
 
             // Get user id
             const urlSplit = req.url.split(json.pathDelimiter);
@@ -542,16 +541,16 @@ function singleStreamWebhook(broadcasterId){
         type: "POST",
         url: json.webhookURL,
         data: {
-            hub.callback: `${json.webServerURL}${json.stopTracker}`
-                    + `${broadcasterId}`,
-            hub.mode: "subscribe",
-            hub.topic: json.streamTopicURL + broadcasterId,
-            hub.lease_seconds: json.subscriptionExpiration,
-            hub.secret: json.secret
+            "hub.callback": `${json.webServerURL}${json.stopTracker}`
+                    + `/${broadcasterId}`,
+            "hub.mode": "subscribe",
+            "hub.topic": json.streamTopicURL + broadcasterId,
+            "hub.lease_seconds": json.subscriptionExpiration,
+            "hub.secret": json.personalSecret
         },
         error: function(jsXHR, textStatus, err){
-            logger.error(`Failed attempt - webhookSubscribe %s: `
-                    + `${textStatus}`);
+            logger.error(`Failed attempt - webhookSubscribe ${broadcasterId}: `
+                    + `${err}`);
         }
     });
 }
@@ -587,7 +586,7 @@ function getBearerToken(){
         data: {
             "client_id": json.clientId,
             "client_secret": json.clientSecret,
-            "grant_type" = "client_credentials"
+            "grant_type": "client_credentials"
         },
 
         // Sets accessToken and refreshToken for use later.
@@ -597,7 +596,7 @@ function getBearerToken(){
         },
 
         error: function(jsXJR, textStatus, err){
-            logger.error(`Failed attempt - getBearerToken: ${textStatus}`);
+            logger.error(`Failed attempt - getBearerToken: ${err}`);
         }
     });
 }
@@ -624,7 +623,7 @@ function refreshBearerToken(){
         },
 
         error: function(jsXHR, textStatus, err){
-            logger.error(`Failed attempt - refreshBearerToken: ${textStatus}`);
+            logger.error(`Failed attempt - refreshBearerToken: ${err}`);
         }
     });
 }
@@ -655,7 +654,7 @@ function _checkJWT(req, res){
  */
 function _assertInitSQLErr(isErr){
     if(isErr){
-        logger.shutdown(function(){});
+        log4js.shutdown(function(){});
         sql.endConnections();
         process.exit(0);
     }
@@ -667,7 +666,7 @@ function _assertInitSQLErr(isErr){
  */
 function _killGracefully(){
     
-    logger.shutdown(function(){});
+    log4js.shutdown(function(){});
 
     sql.endConnections();
 
@@ -679,9 +678,9 @@ function _killGracefully(){
 // Unix exit code listeners.
 
 process.on("SIGTERM", function(){
-    killGracefully();
+    _killGracefully();
 });
 
 process.on("SIGINT", function(){
-    killGracefully();
+    _killGracefully();
 });

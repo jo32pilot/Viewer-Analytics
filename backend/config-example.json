@@ -3,6 +3,7 @@
     "extensionId": "YOUR_EXTENSION_ID_HERE",
     "clientId": "YOUR_CLIENT_ID_HERE",
     "clientSecret": "YOUR_CLIENT_SECRET_HERE",
+    "personalSecret": "YOUR_SELF_DEFINED_SECRET_HERE",
     "myId": "YOUR_ID_HERE",
 
     "certPath": "YOUR_CERT_PATH_HERE",

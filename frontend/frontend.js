@@ -7,15 +7,6 @@
 //---------- CONSTANTS ----------//
 
 /**
- * Error message.
- * @const
- */
-const ERR_MESSAGE = "Sorry! Something went wrong. If you could report the "
-                    + "error and what you were doing over at "
-                    + "https://github.com/jo32pilot/Viewer-Analytics/issues"
-                    + "that would help a lot!"
-
-/**
  * Paths to dark mode css.
  * @const
  */
@@ -208,7 +199,9 @@ $(".tabtimes").on("click", function(ev){
 
 
 // Define search bar submit event.
-$("#search").submit(nameQuery, function(ev){
+$("#search").submit(function(ev){
+
+    const nameQuery = $(this).val();
 
     // Don't do anything if input is empty.
     if(nameQuery.length == 0){
@@ -449,8 +442,8 @@ function refresh(){
 function _initButtons(){
 
     // Display 50 more users.
-    for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE; 
-            i++){
+    for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE
+            && i < viewers.length; i++){
 
         // Each user is a button that opens up to show their long stats
         // when clicked.
@@ -503,10 +496,7 @@ function _createRequest(path, callback=undefined, additionalArgs={}){
     const settings = {
         url: SERVER_DOMAIN + path,
         type: "GET",
-        headers: reqHeaders
-        error: {
-            $("#leaderboard").text(ERR_MESSAGE);
-        }
+        headers: reqHeaders,
     };
 
     // If callback exists, attach it.
