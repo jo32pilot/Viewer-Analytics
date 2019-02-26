@@ -3,18 +3,26 @@
  * time for any given channel.
  */
 
-"use strict"
+"use strict";
 
+
+/**
+ * I mean, I kind of feel like this is self explanitory. It's one second. Just
+ * in milliseconds.
+ * @const
+ */
 const ONE_SECOND = 1000;
+
 
 /**
  * The aforementioned TimeTracker class.
+ * @export
  */
 class TimeTracker{
 
     /**
      * @param {string} user Unique user id to identify who's time is being 
-     *     kept.
+     *                 kept.
      */
     constructor(user){
         this.user = user;

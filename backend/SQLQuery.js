@@ -1,7 +1,7 @@
 /**
- * @fileoverview Defines functions to act as shortcuts for MySQL commands.
- * Dependencies:
- *      - [mysql](https://www.npmjs.com/package/mysql)
+ * @fileoverview Defines MySQL queries as functions using the 
+ * [mysql](https://www.npmjs.com/package/mysql) package to make code 
+ * cleaner and easier to maintain.
  */
 
 const sql = require("mysql");
@@ -25,9 +25,28 @@ module.exports = {
     endConnections: endConnections,
 };
 
+/**
+ * Suffix to append to channel ids to identify a channel's table as
+ * the non-whitelist variant of viewer time storage.
+ * @const
+ */
 const _REGULAR_SUFFIX = "R";
+
+/**
+ * Suffix to append to channel ids to identify a channel's table as
+ * the whitelist variant of viewer time storage.
+ * @const
+ */
 const _WHITELIST_SUFFIX = "WS";
+
+/**
+ * Suffix to append to channel ids to identify a channel's table as
+ * the daily variant of viewer time storage. These tables are used
+ * to create line graphs to visualize viewer watch habits.
+ * @const
+ */
 const _GRAPH_SUFFIX = "G";
+
 
 // Settup logging
 log4js.configure({
@@ -47,6 +66,7 @@ log4js.configure({
     }
 });
 const logger = log4js.getLogger();
+
 
 let pool = undefined; //Connection pool to MySQL server
 

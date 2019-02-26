@@ -1,6 +1,11 @@
 /**
  * @fileoverview Backend for Viewer Analytics Twitch extension. Handles API
  * calls, database queries, viewer queries, and broadcaster configurations.
+ * 
+ * NOTE: I realized a little too late that I've been writing "day" table in 
+ * comments which is probably pretty ambiguous. I mean the table that stores the
+ * times accumulated each day. I.e., the table with the "graph suffix" attached
+ * to it. (@see SQLQueries.js)
  */
 
 const schedule = require("node-schedule");
@@ -28,11 +33,20 @@ const json = require(JSON_PATH);
 const jwt = jsrsasign.KJUR.jws.JWS;
 const TimeTracker = time.TimeTracker;
 
-const trackers = {};        // Session TimeTrackers for non-whitelisted viewers
-const whitelisted = {};     // Session TimeTrackers for whitelisted viewers
-const daily = {};           // Tracks daily watch times for graphs
+
+// Session TimeTrackers for non-whitelisted viewers.
+const /** !Object<string, <string, !TimeTracker>> */ trackers = {};
+
+// Session TimeTrackers for whitelisted viewers.
+const /** !Object<string, <string, !TimeTracker>> */ whitelisted = {};
+
+// Tracks daily watch times for graphs.
+const /** !Object<string, <string, !TimeTracker>> */ daily = {};
+
+
 let accessToken = "";       // Bearer token for increase API call rates
 let refreshToken = "";      // Token to refresh accessToken when needed
+
 
 // Settup logging
 log4js.configure({
@@ -53,6 +67,7 @@ log4js.configure({
 });
 const logger = log4js.getLogger();
 
+
 sql.startConnections();
 sql.createStreamerList();
 getBearerToken();
@@ -67,6 +82,7 @@ schedule.scheduleJob(json.cronSettings, updateDays);
 schedule.scheduleJob(json.cronSettings, refreshBearerToken);
 //TODO schedule cron for week, months, years? Or manually.
 
+
 const options = {
 
     cert: fs.readFileSync(json.certPath),
@@ -74,7 +90,9 @@ const options = {
 
 };
 
-// Begin init server
+
+/* Begin server definition */
+
 const server = https.createServer(options, function(req, res){
 
     const headers = json.headers;
@@ -91,7 +109,7 @@ const server = https.createServer(options, function(req, res){
     // for viewer.
     if(req.method == "GET" && req.url == json.initBoard){
 
-        if(checkJWT(req, res)){ 
+        if(_checkJWT(req, res)){ 
 
             // Parse JWT payload
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
@@ -173,7 +191,7 @@ const server = https.createServer(options, function(req, res){
     // GET the time period of which the client wants to see. (e.g. week, year)
     else if(req.method == "GET" && req.url == json.getPeriod){
 
-        if(checkJWT(req, res)){
+        if(_checkJWT(req, res)){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -200,7 +218,7 @@ const server = https.createServer(options, function(req, res){
     // of privilege, but I guess it can be seen as both. 
     else if(req.method == "GET" && req.url == json.toggleWhitelist){
 
-        if(checkJWT(req, res)){
+        if(_checkJWT(req, res)){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -265,7 +283,7 @@ const server = https.createServer(options, function(req, res){
     // GET all periods of time for the user specified.
     else if(req.method == "GET" && req.url == json.longStats){
 
-        if(checkJWT(req, res)){
+        if(_checkJWT(req, res)){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -309,7 +327,7 @@ const server = https.createServer(options, function(req, res){
     // GET all users with usernames that contain the name queried for.
     else if(req.method == "GET" && req.url == json.userSearch){
 
-        if(checkJWT(req, res)){
+        if(_checkJWT(req, res)){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -338,7 +356,7 @@ const server = https.createServer(options, function(req, res){
     // Pauses or unpauses time accumulation for specified viewer.
     else if(req.method == "GET" && req.url == json.toggleTracker){
         
-        if(checkJWT(req, res)){
+        if(_checkJWT(req, res)){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
@@ -424,7 +442,13 @@ const server = https.createServer(options, function(req, res){
             request.on("end", function(){
 
                 // Parse query string into object format.
-                const data = qs.parse(body);
+                let data = qs.parse(body)["data"];
+
+                // An empty array means the streamer offline. So if we don't
+                // have an empty array, then there's nothing to do.
+                if(data != []){
+                    return;
+                }
 
                 // user_id is apparently the same as channel_id. Wish I'd known
                 // that earlier.
@@ -462,19 +486,31 @@ const server = https.createServer(options, function(req, res){
 
 /* End of server definition */
 
+
+
+
+/**
+ * Function called as cron job. Updates "day" sql tables at the end of each 
+ * day.
+ */
 function updateDays(){
 
     for(let channel in days){
 
+        // Pass in each channel to SQL function to update.
         sql.updateGraphTable(channel, days[channel]);
 
         for(let viewer in trackers[channel]){
 
+            // If the viewer has a TimeTracker attached to them, reset that
+            // tracker's daily time to 0.
             if(trackers[channel][viewer] != undefined){
                 trackers[channel][viewer].dailyTime = 0;
             }
 
         }
+
+        // Same thing for those whitelisted.
         for(let viewer in whitelisted[channel]){
 
             if(whitelisted[channel][viewer] != undefined){
@@ -485,6 +521,7 @@ function updateDays(){
     }
 }
 
+
 /**
  * Subscribes to broadcast changes for the specified broadcaster. If
  * the broadcaster goes offline, handles deletion of trackers.
@@ -492,6 +529,8 @@ function updateDays(){
  */
 function singleStreamWebhook(broadcasterId){
 
+    // Request specification is documented on Twitch's developers pages.
+    // @see New Twitch API - webhooks
     $.ajax({
         type: "POST",
         url: json.webhookURL,
@@ -499,9 +538,11 @@ function singleStreamWebhook(broadcasterId){
             hub.callback: json.webServerURL + json.stopTracker,
             hub.mode: "subscribe",
             hub.topic: json.streamTopicURL + broadcasterId,
+
             //TODO after testing define webhook expiration
+
             hub.secret: json.secret
-        }
+        },
         error: function(jsXHR, textStatus, err){
             logger.error(`Failed attempt - webhookSubscribe %s: `
                     + `${textStatus}`);
@@ -509,9 +550,11 @@ function singleStreamWebhook(broadcasterId){
     });
 }
 
+
 /**
  * Subscribes to broadcast changes for all specified broadcasters. If
  * the broadcaster goes offline, handles deletion of trackers.
+ * Used on server start up.
  * @param {Array} broadcasterId Array of broadcasters ids.
  */
 function multiStreamWebhook(broadcasterIds){
@@ -519,14 +562,19 @@ function multiStreamWebhook(broadcasterIds){
     for(let streamer of broadcasterIds){
 
         singleStreamWebhook(streamer);
-        streamerIds.push(streamer);
 
     }
 
 }
 
+/**
+ * Retrieves a bearer token from Twitch for authentication. This allows for
+ * more API calls.
+ */
 function getBearerToken(){
 
+    // Agaain, specification is Documented by Twitch.
+    // @see Twitch Developers - authentication
     $.ajax({
         type: "POST",
         url: json.tokenURL,
@@ -535,16 +583,22 @@ function getBearerToken(){
             "client_secret": json.clientSecret,
             "grant_type" = "client_credentials"
         },
+
+        // Sets accessToken and refreshToken for use later.
         success: function(res){
             accessToken = res["access_token"],
             refreshToken = res["refresh_token"]
         },
+
         error: function(jsXJR, textStatus, err){
             logger.error(`Failed attempt - getBearerToken: ${textStatus}`);
         }
     });
 }
 
+/**
+ * Refreshes bearer token as it expires after some time. Refreshes everyday.
+ */
 function refreshBearerToken(){
 
     $.ajax({
@@ -556,17 +610,27 @@ function refreshBearerToken(){
             "client_id": json.clientId,
             "client_secret": json.clientSecret
         },
+
+        // Set accessToken and refreshToken anew.
         success: function(res){
             accessToken = res["access_token"],
             refreshToken = res["refresh_token"]
-        }
+        },
+
         error: function(jsXHR, textStatus, err){
             logger.error(`Failed attempt - refreshBearerToken: ${textStatus}`);
         }
     });
 }
 
-function checkJWT(req, res){
+/**
+ * Helper function to check if the JWT from the client is valid.
+ * @param {IncomingMessage} req Request from client that contains the JWT.
+ * @param {ServerResponse} res Response to client. Used to writeHead and end if
+ *                         JWT isn't valid.
+ * @return false if JWT is not valid. True otherwise.
+ */
+function _checkJWT(req, res){
 
     if(!jwt.verifyJWT(req.headers["extension-jwt"],
             {"b64": json.secret}, {alg: [json.alg]})){
@@ -578,7 +642,11 @@ function checkJWT(req, res){
     return true;
 }
 
-function killGracefully(){
+/**
+ * Helper function to kill server gracefully in the event of
+ * the program shutting down.
+ */
+function _killGracefully(){
     
     logger.shutdown(function(){});
 
@@ -589,6 +657,8 @@ function killGracefully(){
     });
 }
 
+// Unix exit code listeners.
+
 process.on("SIGTERM", function(){
     killGracefully();
 });
@@ -596,4 +666,3 @@ process.on("SIGTERM", function(){
 process.on("SIGINT", function(){
     killGracefully();
 });
-
