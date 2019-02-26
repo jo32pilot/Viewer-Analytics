@@ -256,8 +256,6 @@ $(window).on("scroll", function(){
 });
 
 
-}, BUTTON_COOLDOWN);
-
 /**
  * Populates board and global variables for the first time.
  * @param {string} res Response payload from server containing
