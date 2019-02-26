@@ -6,37 +6,120 @@
 
 //---------- CONSTANTS ----------//
 
+/**
+ * Error message.
+ * @const
+ */
+const ERR_MESSAGE = "Sorry! Something went wrong. If you could report the "
+                    + "error and what you were doing over at "
+                    + "https://github.com/jo32pilot/Viewer-Analytics/issues"
+                    + "that would help a lot!"
+
+/**
+ * Paths to dark mode css.
+ * @const
+ */
 const DARK_MODE = "darkmode.css";
+
+/**
+ * Paths to light mode css.
+ * @const
+ */
 const LIGHT_MODE = "lightmode.css";
+
+/**
+ * Color for inside of line for the line graph.
+ * @const
+ */
+const BACKGROUND_COLOR = "rgb(100, 65, 164)";
+
+/**
+ * Color for border of line for the line graph.
+ * @const
+ */
+const BORDER_COLOR = "rgb(100, 54, 164)";
+
+/**
+ * URL to where server is hosted.
+ * @const
+ */
 const SERVER_DOMAIN = "https://localhost:48091/";
+
+/**
+ * Request URLs to add to the end of the server domain.
+ * @const
+ */
 const INITIAL_BOARD = "initBoard";
 const LONG_STATS = "longStats";
 const GET_PERIOD = "getPeriod";
 const SEARCH_USER = "searchUser";
 const TOGGLE_TRACKER = "toggleTracker";
 const TOGGLE_WHITELIST = "toggleWhitelist";
+
+/**
+ * Determines if a button is active or not. If not, stop focusing on the 
+ * button.
+ * @const
+ */
 const ACTIVE = "active";
+
+/**
+ * Cooldown before user can press refresh again.
+ * @const
+ */
+const BUTTON_COOLDOWN = 1000;
+
+/**
+ * Seconds in a minute.
+ * @const
+ */
 const SECONDS = 60;
+
+/**
+ * Minutes in an hour.
+ * @const.
+ */
 const MINUTE = 60;
+
+/**
+ * Number to increase how many people should appear on the leaderboard.
+ * @const
+ */
 const LEADERBOARD_INCREASE = 50;
 
 //---------- SETTUP ----------//
 
-let name = undefined;
-let authorization = undefined;
-let viewers = undefined;
-let savedBoard = undefined;
-let paused = false;
-let period = "session";
-let currentDisplay = 0;
+/**
+ * Array of arrays. Inner arrays contain usernames at [0] and their
+ * respective accumulated times at [1].
+ * !Array<!Array<string | int>> | undefined
+ */
+let viewers = undefined;            
+
+let name = undefined;               // Display name of user.
+
+let authorization = undefined;      // Authorization object. Properties 
+                                    // are specifed on the Twitch Extensions
+                                    // reference.
+                                    
+let savedBoard = undefined;         // DOM element to save the board so
+                                    // pressing back is seamless.
+
+let paused = false;                 // Whether or not user is paused.
+
+let period = "session";             // Which period of time the user is looking
+                                    // at
+
+let currentDisplay = 0;             // How many people are currently being
+                                    // displayed on the leaderboard.
+
 $("#" + period).addClass(ACTIVE);
 
 //---------- FUNCTIONS / EVENT LISTENERS ----------//
 
-//TODO check if name is undefined for some functions
-
 window.Twitch.ext.actions.requestIdShare();
 
+// Define onAuthorized event.
 window.Twitch.ext.onAuthorized(function(auth){
     
     authorization = auth;
@@ -48,49 +131,89 @@ window.Twitch.ext.onAuthorized(function(auth){
 
 });
 
-
+// Define onContext event
 window.Twitch.ext.onContext(function(cxt, changeArr){
+    
+    // If user is not paused, unpause tracker on the server.
     if(changeArr["isPaused"] == false){
         _createRequest(TOGGLE_TRACKER, additionalArgs={
             "paused": false
         });
     }
+
+    // If user is paused, pause tracker on the server.
     else if(changeArr["isPaused"] == true){
         _createRequest(TOGGLE_TRACKER, additionalArgs={
             "paused": true
         });
     }
+
+    // Toggle dark and light css themes.
     if(changeArr["theme"] == "light"){
         $("#css").attr("href", LIGHT_MODE);
     }
     else if(changeArr["theme"] == "dark"){
         $("#css").attr("href", DARK_MODE);
     }
+
     console.log("onContext fired");
+
 });
+
 
 $("#refresh").on("click", refresh);
 
+
+// Define functionality when clicking on any of the tabs specifying the
+// period of time to display.
 $(".tabtimes").on("click", function(ev){
+    
+    // No need to do anything if the focused tab was clicked again.
+    if(period == this.id){
+        return;
+    }
+
+    // Set cooldown for refresh button.
+    $("#refresh").prop("disabled", true);
+    setTimeout(function(){
+        $("#refresh").prop("disabled", false);
+    }, BUTTON_COOLDOWN);
 
     $(".tabtimes").each(function(){
 
+        // Enable cooldown on all tab time buttons.
+        $(this).prop("disabled", true);
+        setTimeout(function(){
+            $(this).prop("disabled", false);
+        }, BUTTON_COOLDOWN);
+
+        // Unfocus currently focused button.
         if(period == this.id){
             $(this).removeClass(ACTIVE);
         }
 
     });
 
+    // Focus button that was just clicked.
     $(this).addClass(ACTIVE);
 
+    // Request for the times of the period of time clicked.
     _createRequest(GET_PERIOD, initBoard, additionalArgs={
         "period": this.id
     }),
 
     period = this.id;
+
 });
 
+
+// Define search bar submit event.
 $("#search").submit(nameQuery, function(ev){
+
+    // Don't do anything if input is empty.
+    if(nameQuery.length == 0){
+        return;
+    }
 
     _createRequest(SEARCH_USER, displayResults, additionalArgs={
         "viewerQueriedFor": nameQuery
@@ -98,15 +221,18 @@ $("#search").submit(nameQuery, function(ev){
 
 });
 
+
+// Defind when back button is clicked.
 $(window).on("popstate", function(ev){
 
     if(savedBoard != undefined){
         $("#leaderboard").replaceWith(savedBoard);
     }
-    else{
-        //log
-    }
 });
+
+
+// Before window closes or user leaves page, send request to pause their
+// tracker.
 $(window).on("beforeunload", function(){
 
     _createRequest(TOGGLE_TRACKER, addititionalArgs={
@@ -130,10 +256,14 @@ $(window).on("scroll", function(){
 });
 
 
+}, BUTTON_COOLDOWN);
+
 /**
  * Populates board and global variables for the first time.
- * @param {ServerResponse} res Response payload from server containing
- *                         the accumulated times of the viewers.
+ * @param {string} res Response payload from server containing
+ *                 the accumulated times of the viewers.
+ * @param {string} status Text status of the request.
+ * @param {jqXHR} jqXHR XMLHttpRequest object to get response headers from.
  */
 function initBoard(res, status, jqXHR){
 
@@ -142,12 +272,15 @@ function initBoard(res, status, jqXHR){
     currentDisplay = 0;
     viewers = []
 
+    // Parse response string into JSON.
     res = JSON.parse(res);
-
+    
+    // Fill viewers array.
     for (let user in res){
         viewers.push([user, res[user].time]);
     }
 
+    // Sort ascending order by time.
     viewers.sort(function(a, b){
         return a[1] - b[1];
     });
@@ -163,20 +296,32 @@ function initBoard(res, status, jqXHR){
  */
 function displayResults(res){
     
+    // Save #leaderboard element to put back later seamlessly.
     savedBoard = $("#leaderboard").clone(true, true);
     history.pushState({}, "");
     $("#leaderboard").empty();
+
+    // currDisplay saves currentDisplay before a call to initBoard which
+    // sets currentDisplay to 0. But when we press back we want 
+    // currentDisplay to be what it was before initBoard.
+    const currDisplay = currentDisplay;
     initBoard(res);
+
     const back = $("<button/>", {
         id: "leave_search",
         text: "back",
         click: function(){
+
+            // Hide and show the right buttons. Fire popstate event.
+            currentDisplay = currDisplay;
             $(this).addClass("hide_button");
             $("#refresh").removeClass("hide_button");
             $("#search").removeClass("search_bar_move");
             history.back();
         }
     });
+
+    // Hide and show the right buttons.
     back.addClass("search_div_buttons");
     $("#refresh").addClass("hide_button");
     $("#search").addClass("search_bar_move");
@@ -185,11 +330,11 @@ function displayResults(res){
 
 /**
  * Displays leaderboard a given person's exhaustive watch statistics.
- * @param {ServerResponse} res Response payload from server containing the 
- *                         desired statistics.
- * @param {String} status String describing the status of the request.
- * @param {XMLHttpRequest} jqXHR XMLHttpRequest object used for reading
- *                         response headers.
+ * @param {string} res Response payload from server containing the 
+ *                 desired statistics.
+ * @param {string} status String describing the status of the request.
+ * @param {jqXHR} jqXHR XMLHttpRequest object used for reading
+ *                response headers.
  */
 function displayIndividual(res, status, jqXHR){
 
@@ -198,18 +343,24 @@ function displayIndividual(res, status, jqXHR){
     const graphStats = res["graphStats"][0];
     const isWhitelisted = jqXJR.getRequestHeader("whitelisted");
 
-    //temp format
+    // Format the data
     const statsFormatted = $("<div/>", {
         text: `Week: ${longStats["week"]}\nMonth: ${longStats["month"]}\n`
                 + `Year: ${longStats["year"]}\nOverall: ${longStats[all_time]}`,
         id: "info_string"
     });
+
+    // Show if user is whitelisted or not.
     const whitelistText = $("<div/>", {
         text: `Whitelisted: ${isWhitelisted}`,
         id: "whitelist"
     });
-    $("#individual_view").append(statsFormatted);
 
+
+    $("#individual_view").prepend(statsFormatted);
+    $("#individual_view").append(whitelistText);
+
+    // Create graph displaying user's watch habits.
     const ctx = $("#time_graph");
     const dates = [];
     const times = [];
@@ -223,8 +374,8 @@ function displayIndividual(res, status, jqXHR){
         data: {
             labels: dates,
             datasets: {
-                backgroundColor: "rgb(100, 65, 164)",
-                borderColor: "rgb(100, 65, 164)",
+                backgroundColor: BACKGROUND_COLOR,
+                borderColor: BORDER_COLOR,
                 data: times
             },
         },
@@ -232,17 +383,25 @@ function displayIndividual(res, status, jqXHR){
         
     });
 
+
+
+    // If this user is a broadcaster, then display the whitelist button.
     if(jqXHR.getRequestHeader("broadcaster") == true){
 
+        // Initialize button.
         const toggleWhitelist = $("<button/>", {
             text: "Toggle Whitelist",
             click: function(){
+
                 const userToToggle = jqXJR.getRequestHeader("viewerQueriedFor");
+
                 _createRequest(TOGGLE_WHITELIST, function(res){
-                
+                    
+                    // Display new whitelist status.
                     $("#whitelist").text(`Whitelisted: ${res}`);
 
                 }, {"viewerQueriedFor": userToToggle});
+
             }
 
         });
@@ -251,6 +410,7 @@ function displayIndividual(res, status, jqXHR){
 
     }
 
+    // Sliding animation when viewer is clicked on.
     $("#individual_view").toggleSlide();
 }
 
@@ -259,7 +419,22 @@ function displayIndividual(res, status, jqXHR){
  * Refreshes leaderboard with updated viewer times
  */
 function refresh(){
-    //TODO Require cooldown before clicking again
+
+    // Cooldown for refresh button.
+    $("#refresh").prop("disabled", true);
+    setTimeout(function(){
+        $("#refresh").prop("disabled", false);
+    }, BUTTON_COOLDOWN);
+
+    $(".tabtimes").each(function(){
+
+        // Enable cooldown on all tab time buttons.
+        $(this).prop("disabled", true);
+        setTimeout(function(){
+            $(this).prop("disabled", false);
+        }, BUTTON_COOLDOWN);
+
+    });
     
     if(authorization == undefined){
         console.log("Authorization undefined.");
@@ -275,9 +450,12 @@ function refresh(){
  */
 function _initButtons(){
 
+    // Display 50 more users.
     for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE; 
             i++){
 
+        // Each user is a button that opens up to show their long stats
+        // when clicked.
         let item = $("<button/>", {
         
             id: `${viewers[i][0]}`,
@@ -290,6 +468,7 @@ function _initButtons(){
 
         });
 
+        // Format the leaderboard text.
         let displayTime = _secondsToFormat(viewers[i][1]);
         $(`#${viewers[i][0]}`).html(`<span class='order_align'>${i + 1}  `
                 + `${viewers[i][0]}</span><span class='time_align'>`
@@ -299,25 +478,40 @@ function _initButtons(){
 
     }
 
+    // Increase current display for next call.
     currentDisplay += LEADERBOARD_INCREASE;
 
 }
 
+
+/**
+ * Factory function to create ajax requests.
+ * @param {string} path Route to request being made on the server.
+ * @param {!Function} [undefined] callback Callback to call on success.
+ * @param {!Object<*>} [{}] additionalArgs Additional headers to add to
+ *                          request if needed.
+ */
 function _createRequest(path, callback=undefined, additionalArgs={}){
 
     const reqHeaders = {
         "extension-jwt": authorization.token
     };
+
+    // Check for additional args.
     for(let arg in additionalArgs){
         reqHeaders[arg] = additionalArgs[arg];
     }
 
-    //TODO define error handler
     const settings = {
         url: SERVER_DOMAIN + path,
         type: "GET",
         headers: reqHeaders
+        error: {
+            $("#leaderboard").text(ERR_MESSAGE);
+        }
     };
+
+    // If callback exists, attach it.
     if(callback != undefined){
         settings["success"] = callback;
     }
@@ -328,7 +522,7 @@ function _createRequest(path, callback=undefined, additionalArgs={}){
 
 /**
  * Sets the global variable "name"
- * @param {String} username The viewer's username
+ * @param {string} username The viewer's username
  */
 function _setName(username){
     name = username;
@@ -336,7 +530,7 @@ function _setName(username){
 
 /**
  * Converts seconds to hours.
- * @param {Int} seconds Amount of seconds to convert.
+ * @param {int} seconds Amount of seconds to convert.
  * @return the number of hours from the amount of seconds given.
  */
 function _secondsToHours(seconds){
@@ -345,7 +539,7 @@ function _secondsToHours(seconds){
 
 /**
  * Converts seconds to hh:mm:ss format.
- * @param {Int} time Amount of seconds to convert.
+ * @param {int} time Amount of seconds to convert.
  * @return the converted time in the specified format.
  */
 function _secondsToFormat(time){
