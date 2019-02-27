@@ -268,7 +268,12 @@ function initBoard(res, status, jqXHR){
     
     // Fill viewers array.
     for (let user in res){
-        viewers.push([user, res[user].time]);
+        if(res[user] = undefined){
+            viewers.push([user, 0]);
+        }
+        else{
+            viewers.push([user, res[user].time]);
+        }
     }
 
     // Sort ascending order by time.

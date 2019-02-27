@@ -22,6 +22,8 @@ module.exports = {
     createGraphTable: createGraphTable, 
     updateGraphTable: updateGraphTable,
     addViewerGraphTable: addViewerGraphTable,
+    clearWeek: clearWeek,
+    clearMonth: clearMonth,
     updateTime: updateTime,
     endConnections: endConnections,
 };
@@ -690,6 +692,101 @@ function addViewerGraphTable(channelId, viewerId, viewerUsername){
 
     return toReturn;
 
+}
+
+/**
+ * Clears week columns for all tables.
+ * @export
+ */
+function clearWeek(){
+
+    aliveConnections++;
+
+    pool.getConnection(function(err, connection){
+
+        if(_assertConnectionError(err)){
+            return;
+        }
+        
+        const streamersReg = [];
+        const streamersWhitelist = [];
+        connection.query("SELECT * FROM list_of_streamers;",
+                function(error, results fields){
+
+            if(_assertError(error)){
+                return;
+            }
+
+            for(let row of results){
+                streamersReg.push(sql.raw(row["channel_id"] 
+                        + _REGULAR_SUFFIX));
+                streamersWhitelist.push(sql.raw(row["channel_id"] 
+                        + _WHITELIST_SUFFIX));
+            }
+
+        });
+
+        connection.query("UPDATE ?, ? SET week=0;", 
+                [streamerReg, streamerWhitelist], function(error){
+                
+            if(_assertError(error)){
+                return;
+            }
+
+        });
+
+        aliveConnections--;
+        connection.release();
+
+    });
+
+}
+
+/**
+ * Clears month columns for all tables.
+ * @export
+ */
+function clearMonth(){
+
+    aliveConnections++;
+
+    pool.getConnection(function(err, connection){
+
+        if(_assertConnectionError(err)){
+            return;
+        }
+        
+        const streamersReg = [];
+        const streamersWhitelist = [];
+        connection.query("SELECT * FROM list_of_streamers;",
+                function(error, results fields){
+
+            if(_assertError(error)){
+                return;
+            }
+
+            for(let row of results){
+                streamersReg.push(sql.raw(row["channel_id"] 
+                        + _REGULAR_SUFFIX));
+                streamersWhitelist.push(sql.raw(row["channel_id"] 
+                        + _WHITELIST_SUFFIX));
+            }
+
+        });
+
+        connection.query("UPDATE ?, ? SET month=0;", 
+                [streamerReg, streamerWhitelist], function(error){
+                
+            if(_assertError(error)){
+                return;
+            }
+
+        });
+
+        aliveConnections--;
+        connection.release();
+
+    });
 }
 
 /**

@@ -43,6 +43,9 @@ const /** !Object<string, <string, !TimeTracker>> */ whitelisted = {};
 // Tracks daily watch times for graphs.
 const /** !Object<string, <string, !TimeTracker>> */ daily = {};
 
+// Tracks if stream is offline or not. True if online, false otherwise.
+const /** !Object<string, boolean> */ isOnline = {};
+
 let accessToken = "";       // Bearer token for increase API call rates
 let refreshToken = "";      // Token to refresh accessToken when needed
 
@@ -83,6 +86,14 @@ schedule.scheduleJob(json.cronSettings, updateDays);
 
 // Cron schedule to refresh bearerToken
 schedule.scheduleJob(json.cronSettings, refreshBearerToken);
+
+// Cron schedule to clear weekly times.
+schedule.scheduleJob(json.cronWeekly, sql.clearWeek);
+
+// Cron schedule to clear daily times.
+schedule.scheduleJob(json.cronMonthly, sql.clearMonth);
+
+// YEARLY TIMES WILL BE DONE MANUALLY. If I remember...
 
 const options = {
 
@@ -170,8 +181,10 @@ const server = https.createServer(options, function(req, res){
 
                     // Must go after if statement, otherwise viewer might never
                     // get a tracker
-                    trackers[channelId][displayName] = tracker;
-                    res.setHeader("name", displayName);
+                    if(isOnline[channelId]){
+                        trackers[channelId][displayName] = tracker;
+                        res.setHeader("name", displayName);
+                    }
                 },
 
                 // Log request failures. Standard procedure for the rest of the
@@ -453,8 +466,11 @@ const server = https.createServer(options, function(req, res){
                 // An empty array means the streamer offline. So if we don't
                 // have an empty array, then there's nothing to do.
                 if(data != []){
+                    isOnline[urlSplit[1]] = true;
                     return;
                 }
+
+                isOnline[urlSplit[1]] = false;
 
                 // user_id is apparently the same as channel_id. Wish I'd known
                 // that earlier.
