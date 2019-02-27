@@ -4,10 +4,24 @@ body {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
-#title {
-    /* 3/4 * width of iframe (318) = 119.25*/
-    left: calc(50% - 119.25px);
+#board_top {
+    left: calc(50% - 159px);
     position: fixed;
+    width: 318px;
+}
+
+/* Title properties */
+
+#title {
+    border: 0;
+    font-size: 15px;
+    padding: 7px;
+    position: relative;
+    text-align: center;
+}
+
+#title:hover{
+    cursor: default;
 }
 
 /* Search functionality */
@@ -17,7 +31,7 @@ body {
     color: inherit;
     height: 23px;
     left: calc(50% - 159px);
-    position: fixed;
+    position: relative;
     top: 8%;
     width: 318px;
 }
@@ -88,7 +102,7 @@ body {
 #tabs {
     background-color: #363144;
     bottom: 0;
-    height: 40px;
+    height: 35px;
     left: calc(50% - 159px);
     position: fixed;
     width: 318px;
@@ -97,7 +111,7 @@ body {
 .tabtimes {
     background-color: inherit;
     float: left;
-    height: 40px;
+    height: 35px;
     width: 63.6px;
 }
 
