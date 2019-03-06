@@ -91,7 +91,8 @@ function startConnections(){
             host: json.SQLHost,
             user: json.SQLUser,
             password: json.SQLPassword,
-            database: json.database
+            database: json.database,
+            port: json.SQLPort
 
         });
     }
@@ -711,7 +712,7 @@ function clearWeek(){
         const streamersReg = [];
         const streamersWhitelist = [];
         connection.query("SELECT * FROM list_of_streamers;",
-                function(error, results fields){
+                function(error, results, fields){
 
             if(_assertError(error)){
                 return;
@@ -759,7 +760,7 @@ function clearMonth(){
         const streamersReg = [];
         const streamersWhitelist = [];
         connection.query("SELECT * FROM list_of_streamers;",
-                function(error, results fields){
+                function(error, results, fields){
 
             if(_assertError(error)){
                 return;
@@ -899,6 +900,8 @@ function endConnections(){
         // pool.
         if(aliveConnections == 0){
    
+            log4js.shutdown(function(){});
+
             if(pool == undefined){
                 clearInterval(wait);
             }
@@ -906,8 +909,6 @@ function endConnections(){
             pool.end(function(err){
 
                 clearInterval(wait);
-
-                log4js.shutdown(function(){});
                 
                 if(err){
                     logger.error(error.message);

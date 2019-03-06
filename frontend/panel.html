@@ -18,16 +18,23 @@
     </head>
 
     <body>
+
         <div id=list_view>
+
             <div id="board_top">
-            <div id="title">
-                Watch Time Leaderboard
+
+                <div id="title">
+                    Watch Time Leaderboard
+                </div>
+
+                <div id="search_div">
+                    <input type="text" id="search" placeholder="Search for a user" spellcheck="false" autocomplete="off">
+                    <button class="search_div_buttons" id="refresh">Refresh</button>
+                </div>
+
             </div>
 
-            <div id="search_div">
-                <input type="text" id="search" placeholder="Search for a user" spellcheck="false" autocomplete="off">
-                <button class="search_div_buttons" id="refresh">Refresh</button>
-            </div>
+            <div id="leaderboard">
             </div>
 
             <div id="tabs">
@@ -38,8 +45,6 @@
                 <button class="tabtimes" id="all_time">Overall</button>
             </div>
 
-            <div id="leaderboard">
-            </div>
         </div>
 
         <div id="individual_view">

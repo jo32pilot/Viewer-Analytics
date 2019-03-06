@@ -6,26 +6,35 @@
         <title>Broadcaster Time Leaderboard</title>
 
         <meta charset="UTF-8"></meta>
-        <meta name="description" content="Broadcaster dashboard for twitch extension that tracks viewer watch time"></meta>
+        <meta name="description" content="Broadcaster dashboard for Twitch extension that tracks viewer watch time"></meta>
         <meta name="keywords" content="Twitch extension, Viewer analytics, Twitch leaderboard"></meta>
         <meta name="author" content="lito_john"></meta>
 
-        <link rel="stylesheet" href="darkmode.css">
+        <link id="css" rel="stylesheet" href="darkmode.css">
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
         <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
-        <script src=https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.4.0/Chart.min.js"></script>
 
     </head>
 
     <body>
+
         <div id=list_view>
-            <div id="title">
-                <p align="center">Watch Time Leaderboard</p>
+
+            <div id="board_top">
+
+                <div id="title">
+                    Watch Time Leaderboard
+                </div>
+
+                <div id="search_div">
+                    <input type="text" id="search" placeholder="Search for a user" spellcheck="false" autocomplete="off">
+                    <button class="search_div_buttons" id="refresh">Refresh</button>
+                </div>
+
             </div>
 
-            <div id="search_div">
-                <input type="text" id="search" placeholder="Search for a user" spellcheck="false" autocomplete="off">
-                <button class="search_div_buttons" id="refresh">Refresh</button>
+            <div id="leaderboard">
             </div>
 
             <div id="tabs">
@@ -36,8 +45,6 @@
                 <button class="tabtimes" id="all_time">Overall</button>
             </div>
 
-            <div id="leaderboard">
-            </div>
         </div>
 
         <div id="individual_view">

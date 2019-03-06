@@ -34,7 +34,7 @@ const BORDER_COLOR = "rgb(100, 54, 164)";
  * URL to where server is hosted.
  * @const
  */
-const SERVER_DOMAIN = "https://localhost:48091/";
+const SERVER_DOMAIN = "https://vieweranalytics.me:48091/";
 
 /**
  * Request URLs to add to the end of the server domain.
@@ -54,11 +54,6 @@ const TOGGLE_WHITELIST = "toggleWhitelist";
  */
 const ACTIVE = "active";
 
-/**
- * Cooldown before user can press refresh again.
- * @const
- */
-const BUTTON_COOLDOWN = 1000;
 
 /**
  * Seconds in a minute.
@@ -108,7 +103,7 @@ $("#" + period).addClass(ACTIVE);
 
 //---------- FUNCTIONS / EVENT LISTENERS ----------//
 
-window.Twitch.ext.actions.requestIdShare();
+Twitch.ext.actions.requestIdShare();
 
 // Define onAuthorized event.
 window.Twitch.ext.onAuthorized(function(auth){
@@ -164,19 +159,7 @@ $(".tabtimes").on("click", function(ev){
         return;
     }
 
-    // Set cooldown for refresh button.
-    $("#refresh").prop("disabled", true);
-    setTimeout(function(){
-        $("#refresh").prop("disabled", false);
-    }, BUTTON_COOLDOWN);
-
     $(".tabtimes").each(function(){
-
-        // Enable cooldown on all tab time buttons.
-        $(this).prop("disabled", true);
-        setTimeout(function(){
-            $(this).prop("disabled", false);
-        }, BUTTON_COOLDOWN);
 
         // Unfocus currently focused button.
         if(period == this.id){
@@ -258,7 +241,7 @@ $(window).on("scroll", function(){
  */
 function initBoard(res, status, jqXHR){
 
-    _setName(jqXHR.getRequestHeader("name"));
+    _setName(jqXHR.getResponseHeader("name"));
     $("#leaderboard").empty();
     currentDisplay = 0;
     viewers = []
@@ -268,11 +251,11 @@ function initBoard(res, status, jqXHR){
     
     // Fill viewers array.
     for (let user in res){
-        if(res[user] = undefined){
+        if(res[user] == undefined){
             viewers.push([user, 0]);
         }
         else{
-            viewers.push([user, res[user].time]);
+            viewers.push([user, res[user]]);
         }
     }
 
@@ -337,7 +320,7 @@ function displayIndividual(res, status, jqXHR){
     res = JSON.parse(res);
     const longStats = res["longStats"][0];
     const graphStats = res["graphStats"][0];
-    const isWhitelisted = jqXJR.getRequestHeader("whitelisted");
+    const isWhitelisted = jqXJR.getResponseHeader("whitelisted");
 
     // Format the data
     const statsFormatted = $("<div/>", {
@@ -382,14 +365,15 @@ function displayIndividual(res, status, jqXHR){
 
 
     // If this user is a broadcaster, then display the whitelist button.
-    if(jqXHR.getRequestHeader("broadcaster") == true){
+    if(jqXHR.getResponseHeader("broadcaster") == true){
 
         // Initialize button.
         const toggleWhitelist = $("<button/>", {
             text: "Toggle Whitelist",
             click: function(){
 
-                const userToToggle = jqXJR.getRequestHeader("viewerQueriedFor");
+                const userToToggle = 
+                        jqXJR.getResponseHeader("viewerQueriedFor");
 
                 _createRequest(TOGGLE_WHITELIST, function(res){
                     
@@ -416,22 +400,6 @@ function displayIndividual(res, status, jqXHR){
  */
 function refresh(){
 
-    // Cooldown for refresh button.
-    $("#refresh").prop("disabled", true);
-    setTimeout(function(){
-        $("#refresh").prop("disabled", false);
-    }, BUTTON_COOLDOWN);
-
-    $(".tabtimes").each(function(){
-
-        // Enable cooldown on all tab time buttons.
-        $(this).prop("disabled", true);
-        setTimeout(function(){
-            $(this).prop("disabled", false);
-        }, BUTTON_COOLDOWN);
-
-    });
-    
     if(authorization == undefined){
         console.log("Authorization undefined.");
     }

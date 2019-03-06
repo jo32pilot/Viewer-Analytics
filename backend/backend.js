@@ -109,6 +109,14 @@ const server = https.createServer(options, function(req, res){
 
     const headers = json.headers;
 
+    // Parsing URL for webhook subscription.
+    const webhookPath = undefined;
+    const urlSplit = req.url.split(json.pathDelimiter);
+    if(urlSplit.length >= json.minURLLength){
+        webhookPath = json.pathDelimiter + 
+                urlSplit[urlSplit.length - minURLLength];
+    }
+
     // CORS preflight request handler
     if(req.method == "OPTIONS"){
 
@@ -127,28 +135,50 @@ const server = https.createServer(options, function(req, res){
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
 
+            const userId = requestPayload["user_id"]
             const channelId = requestPayload["channel_id"];
 
             // If the channel isn't in trackers, create tables and places
             // to store the channel's data
             if(!trackers.hasOwnProperty(channelId)){
                 trackers[channelId] = {};
-                daily[channelId] = {};
                 sql.updateStreamerList(channelId);
                 sql.addStreamerTable(channelId);
                 sql.createGraphTable(channelId);
             }
-          
-            // Twitch API call to GET user display name
-            $.ajax({
-
-                url: json.apiURL + "users?id=" + requestPayload["user_id"],
-                type: "GET",
-                headers:{
+            if(!daily.hasOwnProperty(channelId)){
+                daily[channelId] = {};
+            }
+         
+            // Begin Twitch API call to GET user display name
+            const reqOptions = {
+                "host": json.apiURL,
+                "path": json.apiPath + requestPayload["user_id"],
+                "method": "GET",
+                "headers": {
                     "Authorization": `Bearer ${accessToken}`
                 },
-                success: function(response){
-    
+            };
+
+            const request = https.request(function(requstResponse){
+   
+                requestResponse.setEncoding("utf8");
+                let data = "";
+                requestResponse.on("data", function(chunk){
+                    data += chunk;
+
+                    // Either something went wrong or someone is attempting
+                    // to overflow the server.
+                    if(data.length > 1e6){
+                        logger.fatal(`Overflow attempt - stopTracker: `
+                                + `ORIGIN: ${req["Origin"]}`);
+                        request.connection.destroy();
+                    }
+                });
+                requestResponse.on("end", function(){
+                    
+                    const response = JSON.parse(data)["data"][0];
+
                     // If the user is a streamer and their id (which is also
                     // their channel id) can't be found, that means
                     // we haven't subscribed to the webhook for their channel
@@ -185,19 +215,25 @@ const server = https.createServer(options, function(req, res){
                         trackers[channelId][displayName] = tracker;
                         res.setHeader("name", displayName);
                     }
-                },
 
-                // Log request failures. Standard procedure for the rest of the
-                // error handlers in thie file.
-                error: function(jqXHR, textStatus, errThrown){
-                    res.writeHead(json.badRequest);
-                    res.end();
-                    logger.info(errThrown);
-                }
+                    res.writeHead(json.success, headers);
+                    res.end(JSON.stringify(trackers[channelId]));
+
+                });
+
             });
 
-            res.writeHead(json.success, headers);
-            res.end(JSON.stringify(trackers[channelId]));
+
+            // Log request failures. Standard procedure for the rest of the
+            // error handlers in thie file.
+            request.on("error", function(errThrown){
+                res.writeHead(json.badRequest);
+                res.end();
+                logger.info(errThrown.message);
+            });
+
+            request.end();
+
 
         }
     }
@@ -408,14 +444,26 @@ const server = https.createServer(options, function(req, res){
     }
 
     // To verify the webhook subscription
-    else if(req.method == "GET" && req.url == json.stopTracker){
+    else if(req.method == "GET" && webhookPath == json.stopTracker){
 
-        const token = queryParamreq.url.split(json.verificationDelimiter);
+        const queryParam = req.url.split(json.queryDelimiter);
+        let token = qs.parse(queryParam[1]);
+        
+        if(token["hub.challenge"] == undefined){
+            logger.info(`Subscription mode: ${token["hub.mode"]}`
+                    + `Reason: ${token["hub.reason"]}`);
+            res.writeHead(json.success);
+            res.end();
+        }
 
-        // Token will always be at the end of the query string.
-        token = token[token.length];
-        res.writeHead(json.success, token);
-        res.end();
+        else{
+            logger.info(`Subscription success: ${req.url}`);
+
+            // Token will always be at the end of the query string.
+            token = token["hub.challenge"];
+            res.writeHead(json.success, token);
+            res.end();
+        }
 
     }
 
@@ -550,25 +598,38 @@ function updateDays(){
  * @param {String} broadcasterId Unique of of broadcaster to monitor.
  */
 function singleStreamWebhook(broadcasterId){
+    
+    const topic = encodeURIComponent(json.streamTopicURL + broadcasterId);
+    const webhookPath = `${json.webhookPath}`
+            + `?hub.callback=${json.webServerURL}${json.stopTracker}`
+            + `/${broadcasterId}`
+            + `&hub.mode=subscribe`
+            + `&hub.topic=${topic}`
+            + `&hub.lease_seconds=${json.subscriptionExpiration}`
+            + `&hub.secret=${json.personalSecret}`;
 
     // Request specification is documented on Twitch's developers pages.
     // @see New Twitch API - webhooks
-    $.ajax({
-        type: "POST",
-        url: json.webhookURL,
-        data: {
-            "hub.callback": `${json.webServerURL}${json.stopTracker}`
-                    + `/${broadcasterId}`,
-            "hub.mode": "subscribe",
-            "hub.topic": json.streamTopicURL + broadcasterId,
-            "hub.lease_seconds": json.subscriptionExpiration,
-            "hub.secret": json.personalSecret
+    const reqOptions = {
+        "host": json.apiURL,
+        "path": webhookPath,
+        "method": "POST",
+        "headers": {
+            "Client-ID": json.clientId,
         },
-        error: function(jsXHR, textStatus, err){
-            logger.error(`Failed attempt - webhookSubscribe ${broadcasterId}: `
-                    + `${err}`);
-        }
+    }
+
+    const req = https.request(reqOptions, function(res){
+
+        logger.info(`Request successful: ${broadcasterId}`);
+
     });
+
+    req.on("error", function(err){
+        logger.error(`Failed attempt - webhookSubscribe ${broadcasterId}: `
+                + `${err.message}`);
+    });
+    req.end();
 }
 
 
@@ -594,27 +655,48 @@ function multiStreamWebhook(broadcasterIds){
  */
 function getBearerToken(){
 
-    // Agaain, specification is Documented by Twitch.
+    // Again, specification is Documented by Twitch.
     // @see Twitch Developers - authentication
-    $.ajax({
-        type: "POST",
-        url: json.tokenURL,
-        data: {
-            "client_id": json.clientId,
-            "client_secret": json.clientSecret,
-            "grant_type": "client_credentials"
-        },
+    const tokenPath = `${json.tokenPath}`
+            + `?client_id=${json.clientId}`
+            + `&client_secret=${json.clientSecret}`
+            + `grant_type=client_credentials`;
+
+    const reqOptions = {
+        "host": json.tokenURL,
+        "path": tokenPath,
+        "method": "POST"
+    };
+
+    const req = https.request(reqOptions, function(res){
+
+        let data = "";
+        res.on("data", function(chunk){
+            data += chunk;
+
+            // Either something went wrong or someone is attempting
+            // to overflow the server.
+            if(data.length > 1e6){
+                logger.fatal(`Overflow attempt - stopTracker: `
+                        + `ORIGIN: ${req["Origin"]}`);
+                request.connection.destroy();
+            }
+        });
 
         // Sets accessToken and refreshToken for use later.
-        success: function(res){
-            accessToken = res["access_token"],
-            refreshToken = res["refresh_token"]
-        },
+        req.on("end", function(){
+            data = JSON.parse(data);
+            accessToken = data["access_token"],
+            refreshToken = data["refresh_token"]
+        });
 
-        error: function(jsXJR, textStatus, err){
-            logger.error(`Failed attempt - getBearerToken: ${err}`);
-        }
     });
+
+    req.on("error", function(err){
+        logger.error(`Failed attempt - getBearerToken: ${err}`);
+    });
+
+    req.end();
 }
 
 /**
@@ -622,26 +704,46 @@ function getBearerToken(){
  */
 function refreshBearerToken(){
 
-    $.ajax({
-        type: "POST",
-        url: `${json.tokenRefreshURL}`,
-        data: {
-            "grant_type": "refresh_token",
-            "refresh_token": refreshToken,
-            "client_id": json.clientId,
-            "client_secret": json.clientSecret
-        },
+    const refreshPath = `${tokenRefreshPath}`
+            + `?grant_type=refresh_token`
+            + `&refresh_token=${refreshToken}`
+            + `&client_id=${json.clientId}`
+            + `&client_secret=${json.clientSecret}`;
 
-        // Set accessToken and refreshToken anew.
-        success: function(res){
-            accessToken = res["access_token"],
+    const reqOptions = {
+        "host": json.tokenURL,
+        "path": refreshPath,
+        "method": "POST",
+    };
+
+    const req = https.request(reqOptions, function(res){
+
+        let data = "";
+        res.on("data", function(chunk){
+            data += chunk;
+
+            // Either something went wrong or someone is attempting
+            // to overflow the server.
+            if(data.length > 1e6){
+                logger.fatal(`Overflow attempt - stopTracker: `
+                        + `ORIGIN: ${req["Origin"]}`);
+                request.connection.destroy();
+            }
+        });
+
+        // Sets accessToken and refreshToken for use later.
+        req.on("end", function(){
+            data = JSON.parse(data);
+            accessToken = data["access_token"],
             refreshToken = res["refresh_token"]
-        },
+         });
 
-        error: function(jsXHR, textStatus, err){
-            logger.error(`Failed attempt - refreshBearerToken: ${err}`);
-        }
     });
+
+    req.on("error", function(err){
+        logger.error(`Failed attempt - refreshBearerToken: ${err.message}`);
+    });
+
 }
 
 /**
@@ -682,11 +784,10 @@ function _assertInitSQLErr(isErr){
  */
 function _killGracefully(){
     
-    log4js.shutdown(function(){});
-
     sql.endConnections();
 
     server.close(function(){
+        log4js.shutdown(function(){});
         process.exit(0);
     });
 }

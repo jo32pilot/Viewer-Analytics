@@ -6,6 +6,7 @@ body {
 
 #board_top {
     left: calc(50% - 159px);
+    height: 54.6px;
     position: fixed;
     width: 318px;
 }
@@ -13,10 +14,8 @@ body {
 /* Title properties */
 
 #title {
-    border: 0;
     font-size: 15px;
     padding: 7px;
-    position: relative;
     text-align: center;
 }
 
@@ -31,8 +30,6 @@ body {
     color: inherit;
     height: 23px;
     left: calc(50% - 159px);
-    position: relative;
-    top: 8%;
     width: 318px;
 }
 
@@ -41,8 +38,9 @@ body {
     border: 0;
     color: inherit;
     outline: 0;
+    padding: 2px;
     transition: left .5s ease;
-    width: 243px;
+    width: 239px;
 }
 
 .search_bar_move {
@@ -84,7 +82,8 @@ body {
     /* Box shadw creates a line under each element */
     box-shadow: 0 -1px 0 #1b1823;
     color: inherit;
-    height: 25px;
+    height: 20.24px;
+    position: relative;
     width: 318px;
 }
 
@@ -139,6 +138,17 @@ button:active {
     cursor: pointer;
 }
 
+/* Part where viewers get listed */
+
+#leaderboard {
+    left: calc(50% - 159px);
+    height: 202.4px;
+    overflow: auto;
+    position: absolute;
+    top: 62.6px;
+    width: 318px;
+}
+
 /* Individual view */
 
 #individual_view {
@@ -146,4 +156,19 @@ button:active {
     height: 200px;
     left: calc(50% - 159px);
     width: 318px;
+}
+
+/* Scroll bar */
+
+::-webkit-scrollbar {
+    width: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: inherit;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #6441a4;
+    border-radius: 15px;
 }

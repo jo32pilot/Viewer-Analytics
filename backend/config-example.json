@@ -16,7 +16,7 @@
         "Access-Control-Max-age": 600
     },
 
-    "port": "48091",
+    "port": 48091,
 
     "getName": "/getName",
     "initBoard": "/initBoard",
@@ -29,17 +29,21 @@
   
     "webserverURL": "https://vieweranalytics.me",
     "extensionURL": "https://api.twitch.tv/extensions/",
-    "apiURL": "https://api.twitch.tv/helix/",
-    "webhookURL": "https://api.twitch.tv/helix/webhooks/hub",
     "streamTopicURL": "https://api.twitch.tv/helix/streams?user_id=",
-    "tokenURL": "https://id.twitch.tv/oauth2/token",
-    "tokenRefreshURL": "https://id.twitch.tv/oauth2/token--data-urlencode",
+    "tokenURL": "id.twitch.tv",
+    "apiURL": "api.twitch.tv",
+    "apiPath": "/helix/users?id=",
+    "webhookPath": "/helix/webhooks/hub",
+    "tokenPath": "/oauth2/token",
+    "tokenRefreshPath": "/oauth2/token--data-urlencode",
+
     "alg": "YOUR_PREFERRED_ENCRYPTION_ALGORITHM_HERE",
 
     "limit": 100,
     "SQLHost": "localhost",
     "SQLUser": "root",
     "SQLPassword": "YOUR_SQL_PASSWORD_HERE",
+    "SQLPort": 3306,
     "database": "YOUR_DATABASE_HERE",
 
     "subscriptionExpiration": 864000,
@@ -51,12 +55,17 @@
     "forbidden": 403,
 
     "cronSettings": "0 0 * * *",
+    "cronWeekly": "0 0 * * 0",
+    "cronMonthly": "0 0 1 * 0",
 
     "tableExists": "ER_TABLE_EXISTS_ERROR: Table 'list_of_streamers' already exists",
 
-    "verificationDelimiter": "=",
+    "queryDelimiter": "?",
+    "verificationDelimiter": "?",
     "pathDelimiter": "/",
 
     "maxBytes": 25000000,
-    "maxBackups": 3
+    "maxBackups": 3,
+
+    "minURLLength": 2
 }
