@@ -56,7 +56,7 @@ log4js.configure({
     appenders: {
         everything: {
             type: "file", 
-            filename: "SQL.log",
+            filename: "server.log",
             maxLogSize: json.maxBytes,
             backups: json.maxBackups
         }

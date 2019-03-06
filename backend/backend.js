@@ -18,15 +18,6 @@ const crypto = require("crypto");
 const https = require("https");
 const fs = require("fs");
 
-//Importing jQuery library. Credit for this work around goes to 
-//https://github.com/rstacruz/mocha-jsdom/issues/27
-const jsdom = require("jsdom");
-const {JSDOM} = jsdom;
-const {window} = new JSDOM();
-const {document} = (new JSDOM('')).window;
-global.document = document;
-const $ = require("jquery")(window);
-
 //All other constants go in config.json
 const JSON_PATH = "./config.json";
 const json = require(JSON_PATH);
@@ -110,11 +101,11 @@ const server = https.createServer(options, function(req, res){
     const headers = json.headers;
 
     // Parsing URL for webhook subscription.
-    const webhookPath = undefined;
+    let webhookPath = undefined;
     const urlSplit = req.url.split(json.pathDelimiter);
     if(urlSplit.length >= json.minURLLength){
         webhookPath = json.pathDelimiter + 
-                urlSplit[urlSplit.length - minURLLength];
+                urlSplit[urlSplit.length - json.minURLLength];
     }
 
     // CORS preflight request handler
@@ -170,7 +161,7 @@ const server = https.createServer(options, function(req, res){
                     // Either something went wrong or someone is attempting
                     // to overflow the server.
                     if(data.length > 1e6){
-                        logger.fatal(`Overflow attempt - stopTracker: `
+                        logger.fatal(`Overflow attempt - initBoard: `
                                 + `ORIGIN: ${req["Origin"]}`);
                         request.connection.destroy();
                     }
@@ -227,9 +218,9 @@ const server = https.createServer(options, function(req, res){
             // Log request failures. Standard procedure for the rest of the
             // error handlers in thie file.
             request.on("error", function(errThrown){
-                res.writeHead(json.badRequest);
+                res.writeHead(json.badRequest, headers);
                 res.end();
-                logger.info(errThrown.message);
+                logger.info(`initBoard: API call - ${errThrown.message}`);
             });
 
             request.end();
@@ -284,7 +275,7 @@ const server = https.createServer(options, function(req, res){
                         req.headers["whitelisted"]);
 
                 // If user wan't whitelisted before, whitelist them now
-                if(trackers.hasProperty(req.headers["viewerQueriedFor"])){
+                if(trackers.hasOwnProperty(req.headers["viewerQueriedFor"])){
 
                     whitelisted[req.headers["viewerQueriedFor"]] = 
                             trackers[req.headers["viewerQueriedFor"]];
@@ -314,8 +305,8 @@ const server = https.createServer(options, function(req, res){
             else{
                 res.writeHead(json.forbidden);
                 res.end();
-                logger.warn(`Illegal attempt - toggleWhitelist: `
-                        + `${req["headers"]}`);
+                logger.warn(`Illegal attempt: Not Broadcaster - `
+                        + `toggleWhitelist: ${req["headers"]}`);
             }
         }
 
@@ -324,7 +315,7 @@ const server = https.createServer(options, function(req, res){
         else{
             res.writeHead(json.forbidden);
             res.end();
-            logger.warn(`Illegal attempt - toggleWhitelist: `
+            logger.warn(`Illegal attempt JWT Invalid - toggleWhitelist: `
                     + `${req["headers"]}`);
 
         }
@@ -339,7 +330,7 @@ const server = https.createServer(options, function(req, res){
                     payloadObj;
 
             // Checks whether or not user was whitlisted.
-            if(trackers.hasProperty(req.headers["viewerQueriedFor"])){
+            if(trackers.hasOwnProperty(req.headers["viewerQueriedFor"])){
                 res.setHeader("whitelisted", "False");
             }
             else{
@@ -399,7 +390,8 @@ const server = https.createServer(options, function(req, res){
         else{
             res.writeHead(json.forbidden);
             res.end();
-            logger.info(`Illegal attempt - userSearch: req["headers"]`);
+            logger.info(`Illegal attempt: JWT Invalid - userSearch: `
+                    + `${req["headers"]}`);
         }
     }
 
@@ -415,7 +407,7 @@ const server = https.createServer(options, function(req, res){
             // Viewer unpaused the stream. Start accumulating time again.
             if(requestPayload["paused"] == false){
 
-                if(trackers.hasProperty(viewer)){
+                if(trackers.hasOwnProperty(viewer)){
                     trackers[viewer].unpauseTime();
                 }
                 else{
@@ -427,7 +419,7 @@ const server = https.createServer(options, function(req, res){
             // User paused the stream. Stop accumulating time.
             else{
                
-                if(trackers.hasProperty(viewer)){
+                if(trackers.hasOwnProperty(viewer)){
                     trackers[viewer].pauseTime();
                 }
                 else{
@@ -439,7 +431,8 @@ const server = https.createServer(options, function(req, res){
         else{
             res.writeHead(json.forbidden);
             res.end();
-            logger.info(`Illegal attempt - toggleTracker: req["headers"]`);
+            logger.info(`Illegal attempt: JWT Invalid - toggleTracker: `
+                    + `${req["headers"]}`);
         }
     }
 
@@ -621,7 +614,7 @@ function singleStreamWebhook(broadcasterId){
 
     const req = https.request(reqOptions, function(res){
 
-        logger.info(`Request successful: ${broadcasterId}`);
+        logger.info(`Webhook request successful: ${broadcasterId}`);
 
     });
 
@@ -677,7 +670,7 @@ function getBearerToken(){
             // Either something went wrong or someone is attempting
             // to overflow the server.
             if(data.length > 1e6){
-                logger.fatal(`Overflow attempt - stopTracker: `
+                logger.fatal(`Overflow attempt - getBearerToken: `
                         + `ORIGIN: ${req["Origin"]}`);
                 request.connection.destroy();
             }
@@ -725,7 +718,7 @@ function refreshBearerToken(){
             // Either something went wrong or someone is attempting
             // to overflow the server.
             if(data.length > 1e6){
-                logger.fatal(`Overflow attempt - stopTracker: `
+                logger.fatal(`Overflow attempt - refreshBearerToken: `
                         + `ORIGIN: ${req["Origin"]}`);
                 request.connection.destroy();
             }
