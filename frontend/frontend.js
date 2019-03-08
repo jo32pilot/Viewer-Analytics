@@ -241,7 +241,14 @@ $(window).on("scroll", function(){
  */
 function initBoard(res, status, jqXHR){
 
+    // Disable all buttons until finished initBoard.
+    $(":button").prop("disabled", true);
+
     _setName(jqXHR.getResponseHeader("name"));
+    if(name == undefined){
+        // TODO if name is undefined, notify user to allow id share.
+    }
+
     $("#leaderboard").empty();
     currentDisplay = 0;
     viewers = []
@@ -265,6 +272,9 @@ function initBoard(res, status, jqXHR){
     });
 
     _initButtons();
+
+    // Re-enable buttons
+    $(":button").prop("disabled", false);
     
 }
 
