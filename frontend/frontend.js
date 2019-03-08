@@ -65,7 +65,7 @@ const SECONDS = 60;
  * Minutes in an hour.
  * @const.
  */
-const MINUTE = 60;
+const MINUTES = 60;
 
 /**
  * Number to increase how many people should appear on the leaderboard.
@@ -414,6 +414,10 @@ function refresh(){
  */
 function _initButtons(){
 
+    // How much to increment currentDisplay by to know where to start
+    // indexing from next call to _initButtons.
+    let newCurrDisplay = 0;
+
     // Display 50 more users.
     for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE
             && i < viewers.length; i++){
@@ -439,11 +443,12 @@ function _initButtons(){
                 + `${displayTime}</span>`);
 
         $("#leaderboard").append(item);
+        newCurrDisplay++;
 
     }
 
     // Increase current display for next call.
-    currentDisplay += LEADERBOARD_INCREASE;
+    currentDisplay += newCurrDisplay;
 
 }
 

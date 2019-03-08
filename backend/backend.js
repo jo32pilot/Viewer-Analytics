@@ -146,12 +146,10 @@ const server = https.createServer(options, function(req, res){
                 "host": json.apiURL,
                 "path": json.apiPath + requestPayload["user_id"],
                 "method": "GET",
-                "headers": {
-                    "Authorization": `Bearer ${accessToken}`
-                },
+                "headers": _attachAuth(),
             };
 
-            const request = https.request(function(requstResponse){
+            const request = https.request(reqOptions, function(requestResponse){
    
                 requestResponse.setEncoding("utf8");
                 let data = "";
@@ -188,7 +186,6 @@ const server = https.createServer(options, function(req, res){
                     }
 
                     const displayName = response["display_name"];
-                    const tracker = new TimeTracker(displayName);
 
                     // If viewer can't be found in the channel's trackers, add
                     // them to it and the SQL tables.
@@ -203,6 +200,7 @@ const server = https.createServer(options, function(req, res){
                     // Must go after if statement, otherwise viewer might never
                     // get a tracker
                     if(isOnline[channelId]){
+                        const tracker = new TimeTracker(displayName);
                         trackers[channelId][displayName] = tracker;
                         res.setHeader("name", displayName);
                     }
@@ -450,11 +448,11 @@ const server = https.createServer(options, function(req, res){
         }
 
         else{
-            logger.info(`Subscription success: ${req.url}`);
+            logger.info(`Subscription success: ${queryParam[0]}`);
 
             // Token will always be at the end of the query string.
             token = token["hub.challenge"];
-            res.writeHead(json.success, token);
+            res.write(token);
             res.end();
         }
 
@@ -471,38 +469,38 @@ const server = https.createServer(options, function(req, res){
         res.writeHead(json.success);
         res.end();
 
-        // Verify that request is from twitch webhook subscription
-        const incoming = req.headers["x-hub-signature"].
-                split(json.verificationDelimiter);
+        // Parse POST data
+        let body = "";
+        req.on("data", function(data){
+            body += data;
 
-        const hash = crypto.createHmac(incoming[0], json.personalSecret).
-                update(JSON.stringify(req.body)).
-                digest("hex");
+            // Either something went wrong or someone is attempting
+            // to overflow the server.
+            if(body.length > 1e6){
+                logger.fatal(`Overflow attempt - stopTracker: `
+                        + `ORIGIN: ${req["Origin"]}`);
+                request.connection.destroy();
+            }
+        });
 
-        if(incoming[1] == hash){
 
-            // Parse POST data
-            let body = "";
-            request.on("data", function(data){
-                body += data;
+        // Once all data has been collected.
+        req.on("end", function(){
 
-                // Either something went wrong or someone is attempting
-                // to overflow the server.
-                if(body.length > 1e6){
-                    logger.fatal(`Overflow attempt - stopTracker: `
-                            + `ORIGIN: ${req["Origin"]}`);
-                    request.connection.destroy();
-                }
-            });
+            // Verify that request is from twitch webhook subscription
+            const incoming = req.headers["x-hub-signature"].
+                    split(json.verificationDelimiter);
 
-            // Get user id
-            const urlSplit = req.url.split(json.pathDelimiter);
+            const hash = crypto.createHmac(incoming[0], json.personalSecret).
+                    update(body).digest("hex");
 
-            // Once all data has been collected.
-            request.on("end", function(){
+            if(incoming[1] == hash){
+
+                // Get user id
+                const urlSplit = req.url.split(json.pathDelimiter);
 
                 // Parse query string into object format.
-                let data = qs.parse(body)["data"];
+                let data = JSON.parse(body)["data"][0];
 
                 // An empty array means the streamer offline. So if we don't
                 // have an empty array, then there's nothing to do.
@@ -515,7 +513,7 @@ const server = https.createServer(options, function(req, res){
 
                 // user_id is apparently the same as channel_id. Wish I'd known
                 // that earlier.
-                const channelId = urlSplit[1];
+                const channelId = urlSplit[json.pathChannelIdIndex];
                 const channelTrack = trackers[channelId];
                 const whitelistTrack = whitelisted[channelId];
 
@@ -531,18 +529,23 @@ const server = https.createServer(options, function(req, res){
                     channelTrack[viewer] = undefined;
                 }
                 for(let viewer in whitelisted[channelId]){
-                    daily[channelId][viewer] += whitelistTrack[viewer].dailyTime;
-                    whitelistTrack[viewer].stopTime();
-                    whitelistTrack[viewer] = undefined;
+                daily[channelId][viewer] += whitelistTrack[viewer].
+                        dailyTime;
+                whitelistTrack[viewer].stopTime();
+                whitelistTrack[viewer] = undefined;
                 }
 
-            });
-        }
+                logger.info(`Channel ${channelId} went offline.`);
 
-        // Request probably wasn't from Twitch.
-        else{
-            logger.warn(`Illegal attempt - stopTracker: req["headers"]`);
-        }
+            }
+
+            // Request probably wasn't from Twitch.
+            else{
+                logger.warn(`Illegal attempt - stopTracker: req["headers"]`);
+            }
+
+        });
+
     }
 
 }).listen(json.port);
@@ -593,9 +596,11 @@ function updateDays(){
 function singleStreamWebhook(broadcasterId){
     
     const topic = encodeURIComponent(json.streamTopicURL + broadcasterId);
+    const callback = encodeURIComponent(`${json.webServerURL}:${json.port}`
+            + `${json.stopTracker}/${broadcasterId}`);
+
     const webhookPath = `${json.webhookPath}`
-            + `?hub.callback=${json.webServerURL}${json.stopTracker}`
-            + `/${broadcasterId}`
+            + `?hub.callback=${callback}`
             + `&hub.mode=subscribe`
             + `&hub.topic=${topic}`
             + `&hub.lease_seconds=${json.subscriptionExpiration}`
@@ -614,7 +619,9 @@ function singleStreamWebhook(broadcasterId){
 
     const req = https.request(reqOptions, function(res){
 
-        logger.info(`Webhook request successful: ${broadcasterId}`);
+        logger.info(`Webhook request for ${broadcasterId} ended.\n`
+                + `\tStatus code: ${res.statusCode}\n`
+                + `\tMessage: ${res.statusMessage}`);
 
     });
 
@@ -653,7 +660,7 @@ function getBearerToken(){
     const tokenPath = `${json.tokenPath}`
             + `?client_id=${json.clientId}`
             + `&client_secret=${json.clientSecret}`
-            + `grant_type=client_credentials`;
+            + `&grant_type=client_credentials`;
 
     const reqOptions = {
         "host": json.tokenURL,
@@ -677,8 +684,13 @@ function getBearerToken(){
         });
 
         // Sets accessToken and refreshToken for use later.
-        req.on("end", function(){
+        res.on("end", function(){
+            logger.info(`Access token recieved`);
             data = JSON.parse(data);
+            if(data["status"] == json.forbidden){
+                logger.error(`Invalid attempt - getBearerToken: `
+                        + `${data["status"]}: ${data["message"]}`);
+            }
             accessToken = data["access_token"],
             refreshToken = data["refresh_token"]
         });
@@ -697,7 +709,7 @@ function getBearerToken(){
  */
 function refreshBearerToken(){
 
-    const refreshPath = `${tokenRefreshPath}`
+    const refreshPath = `${json.tokenRefreshPath}`
             + `?grant_type=refresh_token`
             + `&refresh_token=${refreshToken}`
             + `&client_id=${json.clientId}`
@@ -725,7 +737,8 @@ function refreshBearerToken(){
         });
 
         // Sets accessToken and refreshToken for use later.
-        req.on("end", function(){
+        res.on("end", function(){
+            logger.info(`Access token refreshed`);
             data = JSON.parse(data);
             accessToken = data["access_token"],
             refreshToken = res["refresh_token"]
@@ -736,6 +749,8 @@ function refreshBearerToken(){
     req.on("error", function(err){
         logger.error(`Failed attempt - refreshBearerToken: ${err.message}`);
     });
+
+    req.end();
 
 }
 
@@ -756,6 +771,21 @@ function _checkJWT(req, res){
         return false;
     }
     return true;
+}
+
+/**
+ * Attaches authorization token to headers if the token exists. Otherwise,
+ * in order to not rely on the existence of an auth token, we create
+ * an empty headers object.
+ * @return {Object} headers for to make requests. Contains auth token if the
+ *                  token exists. Empty otherwise.
+ */
+function _attachAuth(){
+    let headers = {};
+    if(accessToken != "" && accessToken != undefined){
+        headers["Authorization"] = `Bearer ${accessToken}`
+    }
+    return headers;
 }
 
 /**
