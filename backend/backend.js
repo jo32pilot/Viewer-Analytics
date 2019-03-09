@@ -496,20 +496,17 @@ const server = https.createServer(options, function(req, res){
 
             if(incoming[1] == hash){
 
-                // Get user id
-                const urlSplit = req.url.split(json.pathDelimiter);
-
                 // Parse query string into object format.
                 let data = JSON.parse(body)["data"][0];
 
                 // An empty array means the streamer offline. So if we don't
                 // have an empty array, then there's nothing to do.
                 if(data != []){
-                    isOnline[urlSplit[1]] = true;
+                    isOnline[urlSplit[json.pathChannelIdIndex]] = true;
                     return;
                 }
 
-                isOnline[urlSplit[1]] = false;
+                isOnline[urlSplit[json.pathChannelIdIndex]] = false;
 
                 // user_id is apparently the same as channel_id. Wish I'd known
                 // that earlier.
