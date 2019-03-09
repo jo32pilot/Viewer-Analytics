@@ -200,8 +200,20 @@ const server = https.createServer(options, function(req, res){
                     // Must go after if statement, otherwise viewer might never
                     // get a tracker
                     if(isOnline[channelId]){
-                        const tracker = new TimeTracker(displayName);
-                        trackers[channelId][displayName] = tracker;
+
+                        // If viewer started watching the stream for the first
+                        // time this session, init a TimeTracker
+                        if(trackers[channelId][displayName] == undefined){
+                            const tracker = new TimeTracker(displayName);
+                            trackers[channelId][displayName] = tracker;
+                        }
+
+                        // Otherwise, the probably refreshed or came back after
+                        // leaving the site. So unpause their timer.
+                        else{
+                            trackers[channelId][displayName].unpauseTime();
+                        }
+
                         res.setHeader("name", displayName);
                     }
 
