@@ -16,7 +16,7 @@
         "Access-Control-Max-age": 600
     },
 
-    "port": 48091,
+    "port": 443,
 
     "getName": "/getName",
     "initBoard": "/initBoard",

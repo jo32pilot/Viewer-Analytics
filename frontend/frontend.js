@@ -34,7 +34,7 @@ const BORDER_COLOR = "rgb(100, 54, 164)";
  * URL to where server is hosted.
  * @const
  */
-const SERVER_DOMAIN = "https://vieweranalytics.me:48091/";
+const SERVER_DOMAIN = "https://vieweranalytics.me:443/";
 
 /**
  * Request URLs to add to the end of the server domain.
@@ -262,7 +262,7 @@ function initBoard(res, status, jqXHR){
             viewers.push([user, 0]);
         }
         else{
-            viewers.push([user, res[user]]);
+            viewers.push([user, res[user]["time"]]);
         }
     }
 

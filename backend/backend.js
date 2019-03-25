@@ -11,11 +11,13 @@
 const schedule = require("node-schedule");
 const jsrsasign = require("jsrsasign");
 const time = require("./TimeTracker");
+const flatted = require("flatted");
 const qs = require("querystring");
 const sql = require("./SQLQuery");
 const log4js = require("log4js");
 const crypto = require("crypto");
 const https = require("https");
+const util = require("util");
 const fs = require("fs");
 
 //All other constants go in config.json
@@ -218,7 +220,9 @@ const server = https.createServer(options, function(req, res){
                     }
 
                     res.writeHead(json.success, headers);
-                    res.end(JSON.stringify(trackers[channelId]));
+
+                    // TimeTracker is a circular object. Must call util.inspect.
+                    res.end(flatted.stringify(trackers[channelId]));
 
                 });
 
@@ -250,7 +254,8 @@ const server = https.createServer(options, function(req, res){
             // For current session, just send the trackers.
             if(req["period"] == "session"){
                 res.writeHead(json.success, headers);
-                res.end(JSON.stringify(trackers[requestPayload["channel_id"]]));
+                res.end(flatted.stringify(
+                        trackers[requestPayload["channel_id"]]));
             }
 
             // Otherwise, request other periods from MySQL server.
@@ -395,7 +400,7 @@ const server = https.createServer(options, function(req, res){
                 }
             }
             res.writeHead(json.success, headers);
-            res.end(JSON.stringify(responsePayload));
+            res.end(flatted.stringify(responsePayload));
         }
         else{
             res.writeHead(json.forbidden);

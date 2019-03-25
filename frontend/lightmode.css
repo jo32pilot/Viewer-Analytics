@@ -83,7 +83,7 @@ body {
     box-shadow: 0 -1px 0 #1b1823;
     color: inherit;
     height: 20.24px;
-    position: relative;
+    position: absolute;
     width: 318px;
 }
 
