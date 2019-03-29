@@ -16,7 +16,8 @@
         "Access-Control-Max-age": 600
     },
 
-    "port": 443,
+    "port": 49031,
+    "https": 443,
 
     "getName": "/getName",
     "initBoard": "/initBoard",
@@ -61,7 +62,7 @@
     "tableExists": "ER_TABLE_EXISTS_ERROR: Table 'list_of_streamers' already exists",
 
     "queryDelimiter": "?",
-    "verificationDelimiter": "?",
+    "verificationDelimiter": "=",
     "pathDelimiter": "/",
 
     "maxBytes": 25000000,

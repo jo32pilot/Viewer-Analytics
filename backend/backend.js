@@ -11,7 +11,6 @@
 const schedule = require("node-schedule");
 const jsrsasign = require("jsrsasign");
 const time = require("./TimeTracker");
-const flatted = require("flatted");
 const qs = require("querystring");
 const sql = require("./SQLQuery");
 const log4js = require("log4js");
@@ -220,9 +219,7 @@ const server = https.createServer(options, function(req, res){
                     }
 
                     res.writeHead(json.success, headers);
-
-                    // TimeTracker is a circular object. Must call util.inspect.
-                    res.end(flatted.stringify(trackers[channelId]));
+                    res.end(JSON.stringify(_parseTimes(channelId)));
 
                 });
 
@@ -253,9 +250,10 @@ const server = https.createServer(options, function(req, res){
 
             // For current session, just send the trackers.
             if(req["period"] == "session"){
+                
                 res.writeHead(json.success, headers);
-                res.end(flatted.stringify(
-                        trackers[requestPayload["channel_id"]]));
+                res.end(JSON.stringify(
+                        _parseTimes[requestPayload["channel_id"]]));
             }
 
             // Otherwise, request other periods from MySQL server.
@@ -388,19 +386,43 @@ const server = https.createServer(options, function(req, res){
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
 
+            const channelId = requestPayload["channel_id"];
+
             const responsePayload = {};
 
             // This is super slow. Like, m*n slow where m is the length
             // of the names and n is the amount of names. Don't know that
             // time complexity of includes though. There's probably a better
             // way the search for matching names.
-            for(let viewer in regular[requestPayload["channel_id"]]){
+            for(let viewer in trackers[channelId]){
                 if(viewer.includes(requestPayload["viewerQueriedFor"])){
-                    responsePayload[viewer] = time;
+                    if(trackers[channelId][viewer] != undefined){
+
+                        responsePayload[viewer] = 
+                                trackers[channelId][viewer]["time"];
+
+                    }
+                    else{
+                        responsePayload[viewer] = 0;
+                    }
                 }
             }
+            for(let viewer in whitelisted[channelId]){
+                if(viewer.includes(requestPayload["viewerQueriedFor"])){
+                    if(whitelisted[channelId][viewer] != undefined){
+
+                        responsePayload[viewer] = 
+                            whitelisted[channelId][viewer]["time"];
+
+                    }
+                    else{
+                        responsePayload[viewer] = 0;
+                    }
+                }
+            }
+
             res.writeHead(json.success, headers);
-            res.end(flatted.stringify(responsePayload));
+            res.end(JSON.stringify(responsePayload));
         }
         else{
             res.writeHead(json.forbidden);
@@ -434,10 +456,11 @@ const server = https.createServer(options, function(req, res){
             // User paused the stream. Stop accumulating time.
             else{
                
-                if(trackers.hasOwnProperty(viewer)){
+                if(trackers.hasOwnProperty(viewer) &&
+                        trackers[viewer] != undefined){
                     trackers[viewer].pauseTime();
                 }
-                else{
+                else if(whitelisted[viewer] != undefined){
                     whitelisted[viewer].pauseTime();
                 }
 
@@ -610,7 +633,7 @@ function updateDays(){
 function singleStreamWebhook(broadcasterId){
     
     const topic = encodeURIComponent(json.streamTopicURL + broadcasterId);
-    const callback = encodeURIComponent(`${json.webServerURL}:${json.port}`
+    const callback = encodeURIComponent(`${json.webServerURL}:${json.https}`
             + `${json.stopTracker}/${broadcasterId}`);
 
     const webhookPath = `${json.webhookPath}`
@@ -765,6 +788,33 @@ function refreshBearerToken(){
     });
 
     req.end();
+
+}
+
+
+/**
+ * Helper function to parse times from trackers and whitelisted objects.
+ * Needed because TimeTrackers are circular objects so we can't directly
+ * call JSON.stringify on them.
+ * @param {String} channelId Channel to get viewer times for.
+ * @return a generic object with viewer names as keys and accumulated times
+ *         as values
+ */
+function _parseTimes(channelId){
+
+    times = {};
+    for(let user in trackers[channelId]){
+
+        if(trackers[channelId][user] != undefined){
+            times[user] = trackers[channelId][user]["time"];
+        }
+        else{
+            times[user] = 0;
+        }
+
+    }
+
+    return times;
 
 }
 

@@ -6,7 +6,6 @@
 
 const sql = require("mysql");
 const log4js = require("log4js");
-const flatted = require("flatted");
 const json = require("./config.json");
 
 module.exports = {
@@ -238,7 +237,7 @@ function fetchLongTable(channelId, viewerUsername, res){
 
             // Send MySQL response to client
             res.writeHead(json.success, json.headers);
-            res.end(flatted.stringify(results)); 
+            res.end(JSON.stringify(responsePayload)); 
 
         });
 
@@ -277,7 +276,7 @@ function fetchPeriodTimes(channelId, period, res){
         }
 
         res.writeHead(json.success, json.headers);
-        res.end(flatted.stringify(results));
+        res.end(JSON.stringify(results));
 
     });
     
