@@ -11,7 +11,7 @@
 
     "headers": {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, OPTIONS, POST",
         "Access-Control-Allow-Headers": "extension-jwt, viewerQueriedFor, whitelisted, paused, period, x-hub-signature",
         "Access-Control-Max-age": 600
     },

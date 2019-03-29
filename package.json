@@ -24,7 +24,6 @@
   },
   "homepage": "https://github.com/jo32pilot/Viewer-Analytics#readme",
   "dependencies": {
-    "flatted": "^2.0.0",
     "jsdom": "^13.1.0",
     "jsrsasign": "^8.0.12",
     "log4js": "^4.0.2",
