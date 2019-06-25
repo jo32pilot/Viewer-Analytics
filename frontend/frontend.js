@@ -236,15 +236,18 @@ $(window).on("scroll", function(){
  * Populates board and global variables for the first time.
  * @param {string} res Response payload from server containing
  *                 the accumulated times of the viewers.
- * @param {string} status Text status of the request.
- * @param {jqXHR} jqXHR XMLHttpRequest object to get response headers from.
+ * @param {string} [undefined] status Text status of the request.
+ * @param {jqXHR} [undefined] jqXHR XMLHttpRequest object to get response 
+ *                            headers from.
  */
-function initBoard(res, status, jqXHR){
+function initBoard(res, status=undefined, jqXHR=undefined){
 
     // Disable all buttons until finished initBoard.
     $(":button").prop("disabled", true);
 
-    _setName(jqXHR.getResponseHeader("name"));
+    if(jqXHR != undefined){
+        _setName(jqXHR.getResponseHeader("name"));
+    }
     if(name == undefined){
         // TODO if name is undefined, notify user to allow id share.
     }
@@ -334,8 +337,10 @@ function displayIndividual(res, status, jqXHR){
 
     // Format the data
     const statsFormatted = $("<div/>", {
-        text: `Week: ${longStats["week"]}\nMonth: ${longStats["month"]}\n`
-                + `Year: ${longStats["year"]}\nOverall: ${longStats[all_time]}`,
+        text: `Week: ${longStats["week"]}\n`
+                + `Month: ${longStats["month"]}\n`
+                + `Year: ${longStats["year"]}\n`
+                + `Overall: ${longStats["all_time"]}`,
         id: "info_string"
     });
 
@@ -355,7 +360,7 @@ function displayIndividual(res, status, jqXHR){
     const times = [];
     for(let date in graphStats){
         labels.push(date);
-        dataPoints.push(_secondsToHours(graphStats[date]));
+        times.push(_secondsToHours(graphStats[date]));
     }
     new Chart(ctx, {
         
@@ -383,7 +388,7 @@ function displayIndividual(res, status, jqXHR){
             click: function(){
 
                 const userToToggle = 
-                        jqXJR.getResponseHeader("viewerQueriedFor");
+                        jqXHR.getResponseHeader("viewerQueriedFor");
 
                 _createRequest(TOGGLE_WHITELIST, function(res){
                     
@@ -448,9 +453,9 @@ function _initButtons(){
 
         // Format the leaderboard text.
         let displayTime = _secondsToFormat(viewers[i][1]);
-        $(`#${viewers[i][0]}`).html(`<span class='order_align'>${i + 1}  `
-                + `${viewers[i][0]}</span><span class='time_align'>`
-                + `${displayTime}</span>`);
+        $(`#${viewers[i][0]}`).html(
+                `<span class='order_align'>${i + 1} ${viewers[i][0]}</span>`
+                + `<span class='time_align'>${displayTime}</span>`);
 
         $("#leaderboard").append(item);
         newCurrDisplay++;

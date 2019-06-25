@@ -410,7 +410,7 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
 
     const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
     const whitelistTable = sql.raw(channelId + _WHITELIST_SUFFIX);
-    const removeFrom = undefined;
+    let removeFrom = undefined;
 
     if(whitelisted){
         removeFrom = whitelistTable;
@@ -438,6 +438,8 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
                 toReturn = true;
                 return;
              }
+
+             const row = results[0];
 
              // Insert all times in times array.
              times.push(row.week);
@@ -490,15 +492,16 @@ function createStreamerList(){
     pool.query("CREATE TABLE list_of_streamers(channel_id VARCHAR(50), "
             + "PRIMARY KEY(channel_id));", function(error){
         
-        aliveConnections--;
 
         if(error && error.message == json.tableExists){
+            aliveConnections--;
             return;
         }
         else if(_assertConnectionError(error)){
             toReturn = true;
             return;
         }
+        aliveConnections--;
 
     });
 
@@ -523,12 +526,12 @@ function updateStreamerList(channelId){
 
     pool.query(query, args, function(error){ 
    
-        aliveConnections--;
 
        if( _assertConnectionError(error)){
             toReturn = true;
             return;
        }
+       aliveConnections--;
 
     });
 
@@ -552,12 +555,12 @@ function fetchStreamerList(callback, ...args){
     pool.query("SELECT channel_id FROM list_of_streamers;",
             function(error, results, fields){
 
-        aliveConnections--;
 
         if(_assertConnectionError(error)){
             toReturn = true;
             return;
         }
+        aliveConnections--;
 
         // Begin populating array with results from query
         const toPopulate = [];
@@ -592,12 +595,12 @@ function createGraphTable(channelId){
             + "username VARCHAR(50) NOT NULL UNIQUE, PRIMARY KEY(username));", 
             [channelId], function(err){
 
-        aliveConnections--;
 
         if(_assertConnectionError(err)){
             toReturn = true;
             return;
         }
+        aliveConnections--;
     });
 
     return toReturn;
@@ -620,7 +623,8 @@ function updateGraphTable(channelId, times){
 
     // Get todays date to create new column in table
     const today = new Date();
-    today = sql.raw(`${today.getMonth()}_${today.getDate()}_${today.getFulYear}`);
+    today = sql.raw(
+            `${today.getMonth()}_${today.getDate()}_${today.getFullYear()}`);
 
     channelId = sql.raw(channelId + _GRAPH_SUFFIX);
     aliveConnections++;
@@ -651,6 +655,8 @@ function updateGraphTable(channelId, times){
                     toReturn = true;
                     return;
                 }
+
+                times[viewer] = 0;
 
             });
         }
@@ -683,12 +689,12 @@ function addViewerGraphTable(channelId, viewerId, viewerUsername){
     pool.query("INSERT INTO ? (id, username) VALUES (?, ?);",
             [channelId, viewerId, viewerUsername], function(err){
         
-        aliveConnections--;
         
         if(_assertConnectionError(err)){
             toReturn = true;
             return;
         }
+        aliveConnections--;
     });
 
     return toReturn;
@@ -900,10 +906,9 @@ function endConnections(){
         // pool.
         if(aliveConnections == 0){
    
-            log4js.shutdown(function(){});
-
             if(pool == undefined){
                 clearInterval(wait);
+                log4js.shutdown(function(){});
             }
 
             pool.end(function(err){
@@ -914,9 +919,11 @@ function endConnections(){
                     logger.error(error.message);
                 }
 
+                log4js.shutdown(function(){});
+
             });
         }
-    });
+    }, json.exitCheck);
 }
 
 /**

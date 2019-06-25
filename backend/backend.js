@@ -33,7 +33,7 @@ const /** !Object<string, <string, !TimeTracker>> */ trackers = {};
 const /** !Object<string, <string, !TimeTracker>> */ whitelisted = {};
 
 // Tracks daily watch times for graphs.
-const /** !Object<string, <string, !TimeTracker>> */ daily = {};
+const /** !Object<string, <string, int>> */ daily = {};
 
 // Tracks if stream is offline or not. True if online, false otherwise.
 const /** !Object<string, boolean> */ isOnline = {};
@@ -134,6 +134,7 @@ const server = https.createServer(options, function(req, res){
             // to store the channel's data
             if(!trackers.hasOwnProperty(channelId)){
                 trackers[channelId] = {};
+                whitelisted[channelId] = {};
                 sql.updateStreamerList(channelId);
                 sql.addStreamerTable(channelId);
                 sql.createGraphTable(channelId);
@@ -253,7 +254,7 @@ const server = https.createServer(options, function(req, res){
                 
                 res.writeHead(json.success, headers);
                 res.end(JSON.stringify(
-                        _parseTimes[requestPayload["channel_id"]]));
+                        _parseTimes(requestPayload["channel_id"])));
             }
 
             // Otherwise, request other periods from MySQL server.
@@ -300,7 +301,7 @@ const server = https.createServer(options, function(req, res){
                 else{
                     
                     trakers[req.headers["viewerQueriedFor"]] = 
-                            trackers[req.headers["viewerQueriedFor"]];
+                            whitelisted[req.headers["viewerQueriedFor"]];
                     delete whitelisted[req.headers["viewerQueriedFor"]];
                     response = "False";
 
@@ -440,15 +441,16 @@ const server = https.createServer(options, function(req, res){
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
             const viewer = requestPayload["viewerQueriedFor"];
+            const channelId = requestPayload["channel_id"];
 
             // Viewer unpaused the stream. Start accumulating time again.
             if(requestPayload["paused"] == false){
 
                 if(trackers.hasOwnProperty(viewer)){
-                    trackers[viewer].unpauseTime();
+                    trackers[channelId][viewer].unpauseTime();
                 }
                 else{
-                    whitelisted[viewer].unpauseTime();
+                    whitelisted[channelId][viewer].unpauseTime();
                 }
 
             }
@@ -457,11 +459,11 @@ const server = https.createServer(options, function(req, res){
             else{
                
                 if(trackers.hasOwnProperty(viewer) &&
-                        trackers[viewer] != undefined){
-                    trackers[viewer].pauseTime();
+                        trackers[channelId][viewer] != undefined){
+                    trackers[channelId][viewer].pauseTime();
                 }
-                else if(whitelisted[viewer] != undefined){
-                    whitelisted[viewer].pauseTime();
+                else if(whitelisted[channelId][viewer] != undefined){
+                    whitelisted[channelId][viewer].pauseTime();
                 }
 
             }
@@ -566,10 +568,10 @@ const server = https.createServer(options, function(req, res){
                     channelTrack[viewer] = undefined;
                 }
                 for(let viewer in whitelisted[channelId]){
-                daily[channelId][viewer] += whitelistTrack[viewer].
-                        dailyTime;
-                whitelistTrack[viewer].stopTime();
-                whitelistTrack[viewer] = undefined;
+                    daily[channelId][viewer] += whitelistTrack[viewer].
+                            dailyTime;
+                    whitelistTrack[viewer].stopTime();
+                    whitelistTrack[viewer] = undefined;
                 }
 
                 logger.info(`Channel ${channelId} went offline.`);
@@ -600,14 +602,12 @@ function updateDays(){
 
     for(let channel in days){
 
-        // Pass in each channel to SQL function to update.
-        sql.updateGraphTable(channel, days[channel]);
-
         for(let viewer in trackers[channel]){
 
             // If the viewer has a TimeTracker attached to them, reset that
             // tracker's daily time to 0.
             if(trackers[channel][viewer] != undefined){
+                days[channel][viewer] += trackers[channel][viewer].dailyTime;
                 trackers[channel][viewer].dailyTime = 0;
             }
 
@@ -617,10 +617,14 @@ function updateDays(){
         for(let viewer in whitelisted[channel]){
 
             if(whitelisted[channel][viewer] != undefined){
+                days[channel][viewer] += whitelisted[channel][viewer].dailyTime;
                 whitelisted[channel][viewer].dailyTime = 0;
             }
 
         }
+
+        // Pass in each channel to SQL function to update.
+        sql.updateGraphTable(channel, days[channel]);
     }
 }
 
@@ -778,7 +782,7 @@ function refreshBearerToken(){
             logger.info(`Access token refreshed`);
             data = JSON.parse(data);
             accessToken = data["access_token"],
-            refreshToken = res["refresh_token"]
+            refreshToken = data["refresh_token"]
          });
 
     });

@@ -70,5 +70,7 @@
 
     "minURLLength": 2,
 
-    "pathChannelIdIndex": 2
+    "pathChannelIdIndex": 2,
+    
+    "exitCheck": 250
 }
