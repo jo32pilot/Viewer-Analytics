@@ -77,21 +77,21 @@ body {
 /* Leaderboard */
 
 .list {
-    background-color: inherit;
+    background-color: #2e293d;
 
     /* Box shadw creates a line under each element */
-    box-shadow: 0 1px 0 #1b1823;
     color: inherit;
     height: 20.24px;
+    margin-top: -2.5px;
     width: 318px;
 }
 
 .order_align {
-    text-align: left;
+    float: left;
 }
 
 .time_align {
-    text-align: right;
+    float: right;
 }
 
 

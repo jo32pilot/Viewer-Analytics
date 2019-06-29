@@ -261,12 +261,7 @@ function initBoard(res, status=undefined, jqXHR=undefined){
     
     // Fill viewers array.
     for (let user in res){
-        if(res[user] == undefined){
-            viewers.push([user, 0]);
-        }
-        else{
-            viewers.push([user, res[user]["time"]]);
-        }
+        viewers.push([user, res[user]]);
     }
 
     // Sort ascending order by time.
@@ -453,7 +448,7 @@ function _initButtons(){
 
         // Format the leaderboard text.
         let displayTime = _secondsToFormat(viewers[i][1]);
-        $(`#${viewers[i][0]}`).html(
+        item.html(
                 `<span class='order_align'>${i + 1} ${viewers[i][0]}</span>`
                 + `<span class='time_align'>${displayTime}</span>`);
 
