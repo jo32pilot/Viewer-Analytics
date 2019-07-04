@@ -141,8 +141,9 @@ button:active {
 
 #leaderboard {
     left: calc(50% - 159px);
-    height: 202.4px;
+    height: 350.4px;
     overflow: auto;
+    overflow-x: hidden;
     position: absolute;
     top: 62.6px;
     width: 318px;
@@ -150,11 +151,11 @@ button:active {
 
 /* Individual view */
 
-#individual_view {
+.individual_view {
     display: none;
     height: 200px;
     left: calc(50% - 159px);
-    width: 318px;
+    width: 313px;
 }
 
 /* Scroll bar */

@@ -73,6 +73,25 @@ const MINUTES = 60;
  */
 const LEADERBOARD_INCREASE = 50;
 
+/**
+ * Index to start looping from when pasrsing graph info.
+ * @const
+ */
+const SKIP_ID = 2;
+
+/**
+ * Maximum number of data points to display on the graph.
+ * @const
+ */
+const MAX_GRAPH_DISPLAY = 10;
+
+/**
+ * Minimum number of keys in graph data object to consider
+ * displaying MAX_GRAPH_DISPLAY number of data points.
+ * @const
+ */
+const REQ_KEY_ARR_LEN = 12;
+
 //---------- SETTUP ----------//
 
 /**
@@ -80,7 +99,17 @@ const LEADERBOARD_INCREASE = 50;
  * respective accumulated times at [1].
  * !Array<!Array<string | int>> | undefined
  */
-let viewers = undefined;            
+let viewers = undefined;
+
+/**
+ * Associative array to store people on the leaderboard who have been clicked
+ * as keys and their statistics as values via DOM elements.
+ * !Object<string, !jQueryObject>
+ */
+const clicked = {};
+
+let currentClicked = undefined;     // Name of user who's button was recently 
+                                    // clicked.
 
 let name = undefined;               // Display name of user.
 
@@ -254,15 +283,11 @@ function initBoard(res, status=undefined, jqXHR=undefined){
 
     $("#leaderboard").empty();
     currentDisplay = 0;
-    viewers = []
 
     // Parse response string into JSON.
     res = JSON.parse(res);
     
-    // Fill viewers array.
-    for (let user in res){
-        viewers.push([user, res[user]]);
-    }
+    viewers = res["viewers"];
 
     // Sort ascending order by time.
     viewers.sort(function(a, b){
@@ -328,7 +353,18 @@ function displayIndividual(res, status, jqXHR){
     res = JSON.parse(res);
     const longStats = res["longStats"][0];
     const graphStats = res["graphStats"][0];
-    const isWhitelisted = jqXJR.getResponseHeader("whitelisted");
+    const isWhitelisted = jqXHR.getResponseHeader("whitelisted");
+
+    // Create div to organize all the recieved data.
+    const individualView = $("<div/>", {
+        class: "individual_view",
+    });
+
+    const timeGraph = $("<canvas/>", {
+        class: "time_graph",
+    });
+
+    individualView.append(timeGraph);
 
     // Format the data
     const statsFormatted = $("<div/>", {
@@ -345,36 +381,47 @@ function displayIndividual(res, status, jqXHR){
         id: "whitelist"
     });
 
-
-    $("#individual_view").prepend(statsFormatted);
-    $("#individual_view").append(whitelistText);
+    individualView.prepend(statsFormatted);
+    individualView.append(whitelistText);
 
     // Create graph displaying user's watch habits.
-    const ctx = $("#time_graph");
     const dates = [];
     const times = [];
-    for(let date in graphStats){
-        labels.push(date);
-        times.push(_secondsToHours(graphStats[date]));
+    const keys = Object.keys(graphStats);
+
+    let i = SKIP_ID;
+
+    // Only want at most MAX_GRAPH_DISPLAY number of points shown at a time.
+    if(keys.length >= REQ_KEY_ARR_LEN){
+        i = keys.length - MAX_GRAPH_DISPLAY;
     }
-    new Chart(ctx, {
+
+    for(; i < keys.length; ++i){
+        dates.push(keys[i]);
+        times.push(_secondsToMinutes(graphStats[keys[i]]));
+    }
+    new Chart(timeGraph, {
         
         type: "line",
         data: {
             labels: dates,
-            datasets: {
+            datasets: [{
+                label: "Minutes",
                 backgroundColor: BACKGROUND_COLOR,
                 borderColor: BORDER_COLOR,
                 data: times
-            },
+            }]
         },
-        options: {}
+        options: {
+            responsive: true,
+            maintainAspectRation: false,
+        }
         
     });
 
-
-
     // If this user is a broadcaster, then display the whitelist button.
+    const userClicked = jqXHR.getResponseHeader("viewerqueriedfor");
+
     if(jqXHR.getResponseHeader("broadcaster") == true){
 
         // Initialize button.
@@ -382,26 +429,28 @@ function displayIndividual(res, status, jqXHR){
             text: "Toggle Whitelist",
             click: function(){
 
-                const userToToggle = 
-                        jqXHR.getResponseHeader("viewerQueriedFor");
 
                 _createRequest(TOGGLE_WHITELIST, function(res){
                     
                     // Display new whitelist status.
                     $("#whitelist").text(`Whitelisted: ${res}`);
 
-                }, {"viewerQueriedFor": userToToggle});
+                }, {"viewerqueriedfor": userToToggle});
 
             }
 
         });
 
-        $("#individual_view").append(toggleWhitelist);
+        individualView.append(toggleWhitelist);
 
     }
 
+    individualView.insertAfter($("#" + userClicked));
+    clicked[userClicked] = individualView;
+    
     // Sliding animation when viewer is clicked on.
-    $("#individual_view").toggleSlide();
+    individualView.slideUp();
+    individualView.slideDown();
 }
 
 
@@ -437,11 +486,35 @@ function _initButtons(){
         let item = $("<button/>", {
         
             id: `${viewers[i][0]}`,
-            cls: "list",
+            class: "list",
             click: function(){
-                _createRequest(LONG_STATS, displayIndividual, {
-                    "viewerQueriedFor": viewers[i][0]
-                });
+                
+                const user = viewers[i][0];
+                const userVal = clicked[user];
+                const currClickedVal = clicked[currentClicked];
+                if(currentClicked != undefined){
+                    currClickedVal.slideUp();
+                }
+                
+                // Viewer's button hasn't been clicked before. Fetch stats.
+                if(userVal == undefined){
+    
+                    _createRequest(LONG_STATS, displayIndividual, {
+                        "viewerQueriedFor": viewers[i][0]
+                    });
+                    currentClicked = user;
+                }
+
+                // Viewer's button has been clicked twice in a row. Hide stats.
+                else if(user == currentClicked){
+                    currentClicked = undefined;
+                }
+
+                // Viewer's button has been clicked before. Show stats.
+                else{
+                    userVal.slideDown();
+                    currentClicked = user;
+                }
             }
 
         });
@@ -505,12 +578,12 @@ function _setName(username){
 }
 
 /**
- * Converts seconds to hours.
+ * Converts seconds to minutes.
  * @param {int} seconds Amount of seconds to convert.
- * @return the number of hours from the amount of seconds given.
+ * @return the number of minutes from the amount of seconds given.
  */
-function _secondsToHours(seconds){
-    return seconds / SECONDS / MINUTES;
+function _secondsToMinutes(seconds){
+    return Math.floor(seconds / SECONDS);
 }
 
 /**
@@ -521,7 +594,9 @@ function _secondsToHours(seconds){
 function _secondsToFormat(time){
     const seconds = time % SECONDS;
     const minutes = ((time - seconds) / SECONDS) % MINUTES;
-    const hours = (time - (minutes * MINUTES) - seconds) / SECONDS / MINUTES;
-    return `${hours}:${minutes}:${seconds}`
+    const hours = Math.floor((time - (minutes * MINUTES) - seconds) 
+            / SECONDS / MINUTES);
+    return `${hours} H ${minutes} M ${seconds} S`
 
 }
+

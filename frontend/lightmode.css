@@ -150,7 +150,7 @@ button:active {
 
 /* Individual view */
 
-#individual_view {
+.individual_view {
     display: none;
     height: 200px;
     left: calc(50% - 159px);

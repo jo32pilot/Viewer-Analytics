@@ -94,7 +94,6 @@ const options = {
 
 };
 
-
 /* Begin server definition */
 
 const server = https.createServer(options, function(req, res){
@@ -120,7 +119,7 @@ const server = https.createServer(options, function(req, res){
     // Called when initializing board for the first time. Fetches session data
     // for viewer.
     if(req.method == "GET" && req.url == json.initBoard){
-
+        
         if(_checkJWT(req, res)){ 
 
             // Parse JWT payload
@@ -166,9 +165,11 @@ const server = https.createServer(options, function(req, res){
                         request.connection.destroy();
                     }
                 });
+                
                 requestResponse.on("end", function(){
-                    
+
                     const response = JSON.parse(data)["data"][0];
+                    const displayName = response["display_name"];
 
                     // If the user is a streamer and their id (which is also
                     // their channel id) can't be found, that means
@@ -182,12 +183,13 @@ const server = https.createServer(options, function(req, res){
 
                         }
 
-                        // Then we return because we don't want the streamer
-                        // to accumulate time as well.
+                        // Then we end and return because we don't want the
+                        // streamer to accumulate time as well.
+                        res.writeHead(json.success, headers);
+                        res.end(JSON.stringify(_parseTimes(channelId)));
                         return;
                     }
 
-                    const displayName = response["display_name"];
 
                     // If viewer can't be found in the channel's trackers, add
                     // them to it and the SQL tables.
@@ -250,7 +252,7 @@ const server = https.createServer(options, function(req, res){
                     payloadObj;
 
             // For current session, just send the trackers.
-            if(req["period"] == "session"){
+            if(req.headers["period"] == "session"){
                 
                 res.writeHead(json.success, headers);
                 res.end(JSON.stringify(
@@ -260,7 +262,7 @@ const server = https.createServer(options, function(req, res){
             // Otherwise, request other periods from MySQL server.
             else{
                 sql.fetchPeriodTimes(requestPayload["channel_id"], 
-                        req["period"], res);
+                        req.headers["period"], res);
             }
 
         }
@@ -285,24 +287,24 @@ const server = https.createServer(options, function(req, res){
 
                 // Swap tables for the viewer on the MySQL server.
                 sql.swapViewer(requestPayload["channel_id"], 
-                        req.headers["viewerQueriedFor"], 
+                        req.headers["viewerqueriedfor"], 
                         req.headers["whitelisted"]);
 
                 // If user wan't whitelisted before, whitelist them now
-                if(trackers.hasOwnProperty(req.headers["viewerQueriedFor"])){
+                if(trackers.hasOwnProperty(req.headers["viewerqueriedfor"])){
 
-                    whitelisted[req.headers["viewerQueriedFor"]] = 
-                            trackers[req.headers["viewerQueriedFor"]];
-                    delete trackers[req.headers["viewerQueriedFor"]];
+                    whitelisted[req.headers["viewerqueriedfor"]] = 
+                            trackers[req.headers["viewerqueriedfor"]];
+                    delete trackers[req.headers["viewerqueriedfor"]];
                     response = "True";
                 }
 
                 // If user was whitelisted, unwhitelist them
                 else{
                     
-                    trakers[req.headers["viewerQueriedFor"]] = 
-                            whitelisted[req.headers["viewerQueriedFor"]];
-                    delete whitelisted[req.headers["viewerQueriedFor"]];
+                    trakers[req.headers["viewerqueriedfor"]] = 
+                            whitelisted[req.headers["viewerqueriedfor"]];
+                    delete whitelisted[req.headers["viewerqueriedfor"]];
                     response = "False";
 
                 }
@@ -342,9 +344,11 @@ const server = https.createServer(options, function(req, res){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
+            const viewerQueriedFor = req.headers["viewerqueriedfor"];
+            const channelId = requestPayload["channel_id"];
 
             // Checks whether or not user was whitlisted.
-            if(trackers.hasOwnProperty(req.headers["viewerQueriedFor"])){
+            if(trackers[channelId].hasOwnProperty(viewerQueriedFor)){
                 res.setHeader("whitelisted", "False");
             }
             else{
@@ -360,13 +364,10 @@ const server = https.createServer(options, function(req, res){
             else{
                 res.setHeader("broadcaster", false);
             }
+            
+            res.setHeader("viewerqueriedfor", viewerQueriedFor);
 
-            // Send back who was being queried for. (Redundant? Maybe. But it
-            // makes the client code look slightly cleaner for various reasons.)
-            res.setHeader("viewerQueriedFor", req.headers["viewerQueriedFor"]);
-
-            sql.fetchLongTables(requestPayload["channel_id"], 
-                    req.headers["viewerQueriedFor"], res);
+            sql.fetchLongTable(channelId, viewerQueriedFor, res);
         }
 
         // Request was not made with a JWT signed by Twitch or something like
@@ -396,7 +397,7 @@ const server = https.createServer(options, function(req, res){
             // time complexity of includes though. There's probably a better
             // way the search for matching names.
             for(let viewer in trackers[channelId]){
-                if(viewer.includes(requestPayload["viewerQueriedFor"])){
+                if(viewer.includes(requestPayload["viewerqueriedfor"])){
                     if(trackers[channelId][viewer] != undefined){
 
                         responsePayload[viewer] = 
@@ -409,7 +410,7 @@ const server = https.createServer(options, function(req, res){
                 }
             }
             for(let viewer in whitelisted[channelId]){
-                if(viewer.includes(requestPayload["viewerQueriedFor"])){
+                if(viewer.includes(requestPayload["viewerqueriedfor"])){
                     if(whitelisted[channelId][viewer] != undefined){
 
                         responsePayload[viewer] = 
@@ -440,7 +441,7 @@ const server = https.createServer(options, function(req, res){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
-            const viewer = requestPayload["viewerQueriedFor"];
+            const viewer = requestPayload["viewerqueriedfor"];
             const channelId = requestPayload["channel_id"];
 
             // Viewer unpaused the stream. Start accumulating time again.
@@ -494,7 +495,7 @@ const server = https.createServer(options, function(req, res){
 
             // Token will always be at the end of the query string.
             token = token["hub.challenge"];
-            res.write(token);
+            res.writeHead(json.success, token);
             res.end();
         }
 
@@ -504,7 +505,6 @@ const server = https.createServer(options, function(req, res){
     // subscription. Or it should, at least. There really ever is only
     // one post request and that's from Twitch so we'll leave this as is.
     else if(req.method == "POST"){
-
 
         // Twitch specified to respond with a success immediatley when 
         // request is retrieved.
@@ -600,14 +600,14 @@ const server = https.createServer(options, function(req, res){
  */
 function updateDays(){
 
-    for(let channel in days){
+    for(let channel in daily){
 
         for(let viewer in trackers[channel]){
 
             // If the viewer has a TimeTracker attached to them, reset that
             // tracker's daily time to 0.
             if(trackers[channel][viewer] != undefined){
-                days[channel][viewer] += trackers[channel][viewer].dailyTime;
+                daily[channel][viewer] += trackers[channel][viewer].dailyTime;
                 trackers[channel][viewer].dailyTime = 0;
             }
 
@@ -617,14 +617,14 @@ function updateDays(){
         for(let viewer in whitelisted[channel]){
 
             if(whitelisted[channel][viewer] != undefined){
-                days[channel][viewer] += whitelisted[channel][viewer].dailyTime;
+                daily[channel][viewer] += whitelisted[channel][viewer].dailyTime;
                 whitelisted[channel][viewer].dailyTime = 0;
             }
 
         }
 
         // Pass in each channel to SQL function to update.
-        sql.updateGraphTable(channel, days[channel]);
+        sql.updateGraphTable(channel, daily[channel]);
     }
 }
 
@@ -801,19 +801,22 @@ function refreshBearerToken(){
  * Needed because TimeTrackers are circular objects so we can't directly
  * call JSON.stringify on them.
  * @param {String} channelId Channel to get viewer times for.
- * @return a generic object with viewer names as keys and accumulated times
- *         as values
+ * @return an object with one key value pair where the value is an array of
+ *         arrays. The inner arrays have two values. [0]: The name of the user.
+ *         [1]: Their session time.
  */
 function _parseTimes(channelId){
 
-    times = {};
+    times = {
+        viewers: []
+    };
     for(let user in trackers[channelId]){
 
         if(trackers[channelId][user] != undefined){
-            times[user] = trackers[channelId][user]["time"];
+            times["viewers"].push([user, trackers[channelId][user]["time"]]);
         }
         else{
-            times[user] = 0;
+            times["viewers"].push([user, 0]);
         }
 
     }
@@ -862,11 +865,13 @@ function _attachAuth(){
  * @param {boolean} isErr True if error occurred, false otherwise.
  */
 function _assertInitSQLErr(isErr){
+    
     if(isErr){
         log4js.shutdown(function(){});
         sql.endConnections();
         process.exit(0);
     }
+
 }
 
 /**

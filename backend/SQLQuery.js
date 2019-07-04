@@ -200,6 +200,7 @@ function fetchLongTable(channelId, viewerUsername, res){
     // Label tables to identify
     const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
     const graphTable = sql.raw(channelId + _GRAPH_SUFFIX);
+
     aliveConnections++;
 
     pool.getConnection(function(err, connection){
@@ -265,9 +266,10 @@ function fetchPeriodTimes(channelId, period, res){
 
     const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
     const graphTable = sql.raw(channelId + _GRAPH_SUFFIX);
+    const periodRaw = sql.raw(period);
     aliveConnections++;
 
-    pool.query("SELECT username, ? from ?;", [period, regTable], 
+    pool.query("SELECT username, ? from ?;", [periodRaw, regTable], 
             function(err, results, fields){
 
         if(_assertConnectionError(err, res)){
@@ -276,7 +278,7 @@ function fetchPeriodTimes(channelId, period, res){
         }
 
         res.writeHead(json.success, json.headers);
-        res.end(JSON.stringify(results));
+        res.end(JSON.stringify(_parsePeriodTimes(results, period)));
 
     });
     
@@ -363,7 +365,7 @@ function addStreamerTable(channelId){
 function addViewer(channelId, viewerId, viewerUsername, times=[0, 0, 0, 0], 
         whitelisted=false){
     
-     let toReturn = false;
+    let toReturn = false;
 
     // Change table suffix depending on whitelisted or not
     if(whitelisted){
@@ -648,6 +650,7 @@ function updateGraphTable(channelId, times){
     
         // On the same connection, update each person's time.
         for(let viewer in times){
+
             pool.query("UPDATE ? SET ?=? WHERE username=?;", 
                     [channelId, today, times[viewer], viewer], function(error){
              
@@ -924,6 +927,25 @@ function endConnections(){
             });
         }
     }, json.exitCheck);
+}
+
+/**
+ * Parses response from fetchPeriodTimes into an object.
+ * @param {!Array<!Object>} res Response from the query.
+ * @param {string} period The period of time requested.
+ * @return the object the response was parsed into.
+ */
+function _parsePeriodTimes(res, period){
+
+    const toReturn = {
+        viewers: []
+    };
+
+    for(let user of res){
+        toReturn["viewers"].push([user["username"], user[period]]);
+    }
+
+    return toReturn;
 }
 
 /**
