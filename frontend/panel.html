@@ -10,10 +10,11 @@
         <meta name="keywords" content="Twitch extension, Viewer analytics, Twitch leaderboard"></meta>
         <meta name="author" content="lito_john"></meta>
 
-        <link id="css" rel="stylesheet" href="darkmode.css">
-        <script src="./jquery-3.3.1.min.js"></script>
+        <link id="dark" rel="stylesheet" href="darkmode.css">
+        <link id="light" rel="stylesheet" href="lightmode.css">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
         <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
-        <script src="./Chart.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
 
     </head>
 
@@ -28,6 +29,7 @@
                 </div>
 
                 <div id="search_div">
+                    <button class="search_div_buttons hide_button" id="back">Back</button>
                     <input type="text" id="search" placeholder="Search for a user" spellcheck="false" autocomplete="off">
                     <button class="search_div_buttons" id="refresh">Refresh</button>
                 </div>

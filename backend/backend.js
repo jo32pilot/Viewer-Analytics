@@ -168,8 +168,7 @@ const server = https.createServer(options, function(req, res){
                 
                 requestResponse.on("end", function(){
 
-                    const response = JSON.parse(data)["data"][0];
-                    const displayName = response["display_name"];
+                    let response = JSON.parse(data)["data"];
 
                     // If the user is a streamer and their id (which is also
                     // their channel id) can't be found, that means
@@ -177,19 +176,32 @@ const server = https.createServer(options, function(req, res){
                     // changes. So do that.
                     if(requestPayload["role"] == "broadcaster"){
 
-                        if(!response["id"] in trackers){
-
-                            singleStreamWebhook(response["id"]);
-
+                        if(!channelId in trackers){
+                            singleStreamWebhook(channelId);
                         }
 
-                        // Then we end and return because we don't want the
+                        if(response != undefined){
+                            response = response[0];
+                            const displayName = response["display_name"];
+                            res.setHeader("name", displayName);
+                        }
+
+                        // Then we end and return because we don't want the 
                         // streamer to accumulate time as well.
                         res.writeHead(json.success, headers);
                         res.end(JSON.stringify(_parseTimes(channelId)));
                         return;
                     }
 
+                    // ID sharing not on.
+                    if(response == undefined){
+                        res.writeHead(json.success, headers);
+                        res.end(JSON.stringify(_parseTimes(channelId)));
+                        return;
+                    }
+
+                    response = response[0];
+                    const displayName = response["display_name"];
 
                     // If viewer can't be found in the channel's trackers, add
                     // them to it and the SQL tables.
@@ -218,9 +230,9 @@ const server = https.createServer(options, function(req, res){
                             trackers[channelId][displayName].unpauseTime();
                         }
 
-                        res.setHeader("name", displayName);
                     }
 
+                    res.setHeader("name", displayName);
                     res.writeHead(json.success, headers);
                     res.end(JSON.stringify(_parseTimes(channelId)));
 
@@ -282,29 +294,32 @@ const server = https.createServer(options, function(req, res){
 
             // Only allow this request if the streamer is making it.
             if(requestPayload.role == "broadcaster"){
-                
-                const response = undefined;
+
+                const channelId = requestPayload["channel_id"];
+                const viewer = req.headers["viewerqueriedfor"];
+                let response = undefined;
+                let isWhitelisted = 
+                        whitelisted[channelId].hasOwnProperty(viewer);
 
                 // Swap tables for the viewer on the MySQL server.
                 sql.swapViewer(requestPayload["channel_id"], 
-                        req.headers["viewerqueriedfor"], 
-                        req.headers["whitelisted"]);
+                        viewer, isWhitelisted);
 
                 // If user wan't whitelisted before, whitelist them now
-                if(trackers.hasOwnProperty(req.headers["viewerqueriedfor"])){
+                if(!isWhitelisted){
 
-                    whitelisted[req.headers["viewerqueriedfor"]] = 
-                            trackers[req.headers["viewerqueriedfor"]];
-                    delete trackers[req.headers["viewerqueriedfor"]];
+                    whitelisted[channelId][viewer] = 
+                            trackers[channelId][viewer];
+                    delete trackers[channelId][viewer];
                     response = "True";
                 }
 
                 // If user was whitelisted, unwhitelist them
                 else{
                     
-                    trakers[req.headers["viewerqueriedfor"]] = 
-                            whitelisted[req.headers["viewerqueriedfor"]];
-                    delete whitelisted[req.headers["viewerqueriedfor"]];
+                    trackers[channelId][viewer] = 
+                            whitelisted[channelId][viewer];
+                    delete whitelisted[channelId][viewer];
                     response = "False";
 
                 }
@@ -346,13 +361,16 @@ const server = https.createServer(options, function(req, res){
                     payloadObj;
             const viewerQueriedFor = req.headers["viewerqueriedfor"];
             const channelId = requestPayload["channel_id"];
+            let isWhitelisted = undefined;
 
             // Checks whether or not user was whitlisted.
             if(trackers[channelId].hasOwnProperty(viewerQueriedFor)){
                 res.setHeader("whitelisted", "False");
+                isWhitelisted = false;
             }
             else{
                 res.setHeader("whitelisted", "True");
+                isWhitelisted = true;
             }
 
             // We check to see if the user was a broadcaster. If they are
@@ -367,7 +385,7 @@ const server = https.createServer(options, function(req, res){
             
             res.setHeader("viewerqueriedfor", viewerQueriedFor);
 
-            sql.fetchLongTable(channelId, viewerQueriedFor, res);
+            sql.fetchLongTable(channelId, viewerQueriedFor, isWhitelisted, res);
         }
 
         // Request was not made with a JWT signed by Twitch or something like
@@ -390,35 +408,39 @@ const server = https.createServer(options, function(req, res){
 
             const channelId = requestPayload["channel_id"];
 
-            const responsePayload = {};
+            const responsePayload = {
+                viewers: [],
+            };
 
             // This is super slow. Like, m*n slow where m is the length
             // of the names and n is the amount of names. Don't know that
             // time complexity of includes though. There's probably a better
             // way the search for matching names.
             for(let viewer in trackers[channelId]){
-                if(viewer.includes(requestPayload["viewerqueriedfor"])){
-                    if(trackers[channelId][viewer] != undefined){
+                if(viewer.includes(req.headers["viewerqueriedfor"])){
+                    let viewVal = trackers[channelId][viewer];
+                    if(viewVal != undefined){
 
-                        responsePayload[viewer] = 
-                                trackers[channelId][viewer]["time"];
+                        responsePayload["viewers"].push([viewer, 
+                                viewVal["time"]]); 
 
                     }
                     else{
-                        responsePayload[viewer] = 0;
+                        responsePayload["viewers"].push([viewer, 0]);
                     }
                 }
             }
             for(let viewer in whitelisted[channelId]){
-                if(viewer.includes(requestPayload["viewerqueriedfor"])){
-                    if(whitelisted[channelId][viewer] != undefined){
+                if(viewer.includes(req.headers["viewerqueriedfor"])){
+                    let viewVal = whitelisted[channelId][viewer];
+                    if(viewVal != undefined){
 
-                        responsePayload[viewer] = 
-                            whitelisted[channelId][viewer]["time"];
+                        responsePayload["viewers"].push([viewer, 
+                                viewVal["time"]]); 
 
                     }
                     else{
-                        responsePayload[viewer] = 0;
+                        responsePayload["viewers"].push([viewer, 0]);
                     }
                 }
             }
@@ -468,6 +490,8 @@ const server = https.createServer(options, function(req, res){
                 }
 
             }
+            res.writeHead(json.success, headers);
+            res.end();
         }
         else{
             res.writeHead(json.forbidden);
@@ -834,7 +858,8 @@ function _parseTimes(channelId){
  */
 function _checkJWT(req, res){
 
-    if(!jwt.verifyJWT(req.headers["extension-jwt"],
+    if(req.headers["extension-jwt"] == undefined || 
+            !jwt.verifyJWT(req.headers["extension-jwt"],
             {"b64": json.secret}, {alg: [json.alg]})){
             
         res.writeHead(json.forbidden);

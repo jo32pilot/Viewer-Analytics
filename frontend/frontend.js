@@ -43,7 +43,7 @@ const SERVER_DOMAIN = "https://vieweranalytics.me:443/";
 const INITIAL_BOARD = "initBoard";
 const LONG_STATS = "longStats";
 const GET_PERIOD = "getPeriod";
-const SEARCH_USER = "searchUser";
+const SEARCH_USER = "userSearch";
 const TOGGLE_TRACKER = "toggleTracker";
 const TOGGLE_WHITELIST = "toggleWhitelist";
 
@@ -106,7 +106,21 @@ let viewers = undefined;
  * as keys and their statistics as values via DOM elements.
  * !Object<string, !jQueryObject>
  */
-const clicked = {};
+let clicked = undefined;
+
+/**
+ * Same as viewers array but is used as a reference to save viewers prior to a
+ * search query.
+ * !Array<!Array<string | int>> | undefined
+ */
+let viewersSaved = undefined;
+
+/**
+ * Stores people on the leaderboard who have been clicked on the list prior
+ * to a search query.
+ * !Object<string, !jQueryObject>
+ */
+let clickedSaved = undefined;
 
 let currentClicked = undefined;     // Name of user who's button was recently 
                                     // clicked.
@@ -117,16 +131,24 @@ let authorization = undefined;      // Authorization object. Properties
                                     // are specifed on the Twitch Extensions
                                     // reference.
                                     
-let savedBoard = undefined;         // DOM element to save the board so
+let savedBoard = undefined;         // HTML to save the board so
                                     // pressing back is seamless.
 
-let paused = false;                 // Whether or not user is paused.
+let recentText = undefined;         // Recently submitted text.
+
+let paused = true;                  // Whether or not user is paused.
+
+let displaying = false;             // Whether or not search results are being
+                                    // displayed.
 
 let period = "session";             // Which period of time the user is looking
                                     // at
 
 let currentDisplay = 0;             // How many people are currently being
                                     // displayed on the leaderboard.
+
+let prevDisplay = 0;                // How many people were being displayed on
+                                    // the leaderboard beofre a search.
 
 $("#" + period).addClass(ACTIVE);
 
@@ -136,42 +158,42 @@ Twitch.ext.actions.requestIdShare();
 
 // Define onAuthorized event.
 window.Twitch.ext.onAuthorized(function(auth){
-    
+   
     authorization = auth;
 
     _createRequest(INITIAL_BOARD, initBoard);
-
-    //TODO Get rid of this line
-    console.log("onAuthorized fired");
 
 });
 
 // Define onContext event
 window.Twitch.ext.onContext(function(cxt, changeArr){
-    
+   
     // If user is not paused, unpause tracker on the server.
-    if(changeArr["isPaused"] == false){
-        _createRequest(TOGGLE_TRACKER, additionalArgs={
+    if(paused && cxt["isPaused"] == false){
+        _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
             "paused": false
         });
+        paused = false;
     }
 
     // If user is paused, pause tracker on the server.
-    else if(changeArr["isPaused"] == true){
-        _createRequest(TOGGLE_TRACKER, additionalArgs={
+    else if(!paused && cxt["isPaused"] == true){
+        _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
             "paused": true
         });
+        paused = true;
     }
 
     // Toggle dark and light css themes.
-    if(changeArr["theme"] == "light"){
-        $("#css").attr("href", LIGHT_MODE);
+    if(cxt["theme"] == "light"){
+        $("#dark").prop("disabled", true);
+        $("#light").prop("disabled", false);
+        currTheme = "light"
     }
-    else if(changeArr["theme"] == "dark"){
-        $("#css").attr("href", DARK_MODE);
+    else if(cxt["theme"] == "dark"){
+        $("#light").prop("disabled", true);
+        $("#dark").prop("disabled", false);
     }
-
-    console.log("onContext fired");
 
 });
 
@@ -182,10 +204,22 @@ $("#refresh").on("click", refresh);
 // Define functionality when clicking on any of the tabs specifying the
 // period of time to display.
 $(".tabtimes").on("click", function(ev){
-    
+   
     // No need to do anything if the focused tab was clicked again.
     if(period == this.id){
+
+        // Unless we recently searched. Then bring back old board.
+        if(displaying){
+            $("#back").trigger("click");
+        }
+
         return;
+    }
+
+    if(displaying){
+        $("#leaderboard").empty();
+        _back();
+        displaying = false;
     }
 
     $(".tabtimes").each(function(){
@@ -210,49 +244,61 @@ $(".tabtimes").on("click", function(ev){
 });
 
 
+// Define back button event. Bring back board before initial search.
+$("#back").on("click", function(ev){
+
+    // Hide and show the right buttons. Put back old board.
+    viewers = viewersSaved;
+    currentDisplay = prevDisplay;
+    $("#leaderboard").empty();
+    $("#leaderboard").append(savedBoard);
+    clicked = clickedSaved;
+    _back();
+    displaying = false;
+
+});
+
+// Define a means to submit text input.
+$("#search").keypress(function(e){
+    if(e.which == 13){
+        $(this).submit();
+        return false;
+    }
+});
+
 // Define search bar submit event.
 $("#search").submit(function(ev){
 
     const nameQuery = $(this).val();
 
-    // Don't do anything if input is empty.
-    if(nameQuery.length == 0){
+    // If no change to text box has been made since last submit 
+    // or text is empty, do nothing.
+    if(nameQuery.length == 0 || nameQuery == recentText){
         return;
     }
+    recentText = nameQuery;
 
     _createRequest(SEARCH_USER, displayResults, additionalArgs={
-        "viewerQueriedFor": nameQuery
+        "viewerqueriedfor": nameQuery
     });
 
 });
-
-
-// Defind when back button is clicked.
-$(window).on("popstate", function(ev){
-
-    if(savedBoard != undefined){
-        $("#leaderboard").replaceWith(savedBoard);
-    }
-});
-
 
 // Before window closes or user leaves page, send request to pause their
 // tracker.
 $(window).on("beforeunload", function(){
 
-    _createRequest(TOGGLE_TRACKER, addititionalArgs={
+    _createRequest(TOGGLE_TRACKER, undefined, addititionalArgs={
         "paused": true
     });
 
 });
 
-// Credit to https://gist.github.com/toshimaru/6102647 for this event listener
-// that detects the scrolling to the bottom of a page.
-$(window).on("scroll", function(){
+// Event listener that detects the scrolling to the bottom of a page.
+$("#leaderboard").scroll(function(){
 
-    var scrollHeight = $(document).height();
-    var scrollPosition = $(window).height() + $(window).scrollTop();
-    if((scrollHeight - scrollPosition) / scrollHeight == 0){
+    if($(this)[0].scrollHeight - $(this).scrollTop() - $(this).outerHeight() 
+            < 1){
         
         // Adds another 50 users to the leaderboard.
         _initButtons();
@@ -274,12 +320,33 @@ function initBoard(res, status=undefined, jqXHR=undefined){
     // Disable all buttons until finished initBoard.
     $(":button").prop("disabled", true);
 
-    if(jqXHR != undefined){
+    if(jqXHR != undefined && name == undefined){
         _setName(jqXHR.getResponseHeader("name"));
     }
+    // TODO or if broadcaster
     if(name == undefined){
-        // TODO if name is undefined, notify user to allow id share.
+        const popUp = $("<div/>", {
+            id: "id_off"
+        });
+        const text = "<p>If you want to see yourself on this board, "
+                    + "enable ID sharing! ID sharing just allows the extension" 
+                    + "to see your display name. To enable ID sharing, click on"
+                    + " the person icon at the bottom of this extension, then "
+                    + "click \"Grant\".<br><br>Note: "
+                    + "The streamer is not shown on the board.</p>";
+        popUp.append(text);
+        popUp.prepend($("<button/>", {
+            text: "x",
+            id: "close_pop",
+            click: function(){
+                popUp.remove();
+            }
+        }));
+
+        $("body").append(popUp);
     }
+
+    $("#leaderboard").scrollTop(0);
 
     $("#leaderboard").empty();
     currentDisplay = 0;
@@ -289,10 +356,12 @@ function initBoard(res, status=undefined, jqXHR=undefined){
     
     viewers = res["viewers"];
 
-    // Sort ascending order by time.
-    viewers.sort(function(a, b){
-        return a[1] - b[1];
-    });
+    if(!displaying){
+        // Sort descending order by time.
+        viewers.sort(function(a, b){
+            return b[1] - a[1];
+        });
+    }
 
     _initButtons();
 
@@ -309,35 +378,21 @@ function initBoard(res, status=undefined, jqXHR=undefined){
 function displayResults(res){
     
     // Save #leaderboard element to put back later seamlessly.
-    savedBoard = $("#leaderboard").clone(true, true);
-    history.pushState({}, "");
-    $("#leaderboard").empty();
-
-    // currDisplay saves currentDisplay before a call to initBoard which
-    // sets currentDisplay to 0. But when we press back we want 
-    // currentDisplay to be what it was before initBoard.
-    const currDisplay = currentDisplay;
-    initBoard(res);
-
-    const back = $("<button/>", {
-        id: "leave_search",
-        text: "back",
-        click: function(){
-
-            // Hide and show the right buttons. Fire popstate event.
-            currentDisplay = currDisplay;
-            $(this).addClass("hide_button");
-            $("#refresh").removeClass("hide_button");
-            $("#search").removeClass("search_bar_move");
-            history.back();
+    if(!displaying){
+        if(currentClicked != undefined){
+            clicked[currentClicked].slideUp();
         }
-    });
+        viewersSaved = viewers;
+        savedBoard = $("#leaderboard > *").detach();
+        clickedSaved = clicked;
+        prevDisplay = currentDisplay;
+        $("#back").toggleClass("hide_button");
+        $("#refresh").toggleClass("hide_button");
+        displaying = true;
+    }
 
-    // Hide and show the right buttons.
-    back.addClass("search_div_buttons");
-    $("#refresh").addClass("hide_button");
-    $("#search").addClass("search_bar_move");
-    $("#search_div").prepend(back);
+    $("#leaderboard").empty();
+    initBoard(res);
 }
 
 /**
@@ -354,6 +409,7 @@ function displayIndividual(res, status, jqXHR){
     const longStats = res["longStats"][0];
     const graphStats = res["graphStats"][0];
     const isWhitelisted = jqXHR.getResponseHeader("whitelisted");
+    const userClicked = jqXHR.getResponseHeader("viewerqueriedfor");
 
     // Create div to organize all the recieved data.
     const individualView = $("<div/>", {
@@ -372,13 +428,13 @@ function displayIndividual(res, status, jqXHR){
                 + `Month: ${longStats["month"]}\n`
                 + `Year: ${longStats["year"]}\n`
                 + `Overall: ${longStats["all_time"]}`,
-        id: "info_string"
+        class: "info_string"
     });
 
     // Show if user is whitelisted or not.
     const whitelistText = $("<div/>", {
         text: `Whitelisted: ${isWhitelisted}`,
-        id: "whitelist"
+        id: "whitelist" + userClicked
     });
 
     individualView.prepend(statsFormatted);
@@ -420,22 +476,30 @@ function displayIndividual(res, status, jqXHR){
     });
 
     // If this user is a broadcaster, then display the whitelist button.
-    const userClicked = jqXHR.getResponseHeader("viewerqueriedfor");
-
-    if(jqXHR.getResponseHeader("broadcaster") == true){
+    if(jqXHR.getResponseHeader("broadcaster")){
 
         // Initialize button.
         const toggleWhitelist = $("<button/>", {
             text: "Toggle Whitelist",
+            class: "list_toggle",
             click: function(){
 
+                const headers = {
+                    "viewerqueriedfor": userClicked,
+                };
 
                 _createRequest(TOGGLE_WHITELIST, function(res){
                     
                     // Display new whitelist status.
-                    $("#whitelist").text(`Whitelisted: ${res}`);
+                    const newText = `Whitelisted: ${res}`;
+                    $("#whitelist" + userClicked).text(newText);
+                    if(clickedSaved != undefined && 
+                            clickedSaved[userClicked] != undefined){
+                        clickedSaved[userClicked].children(
+                                "#whitelist" + userClicked).text(newText);
+                    }
 
-                }, {"viewerqueriedfor": userToToggle});
+                }, headers);
 
             }
 
@@ -459,10 +523,6 @@ function displayIndividual(res, status, jqXHR){
  */
 function refresh(){
 
-    if(authorization == undefined){
-        console.log("Authorization undefined.");
-    }
-
     _createRequest(GET_PERIOD, initBoard, additionalArgs={
         "period": period
     });
@@ -476,6 +536,10 @@ function _initButtons(){
     // How much to increment currentDisplay by to know where to start
     // indexing from next call to _initButtons.
     let newCurrDisplay = 0;
+    if(currentDisplay == 0){
+        clicked = {};
+        currentClicked = undefined;
+    }
 
     // Display 50 more users.
     for(let i = currentDisplay; i < currentDisplay + LEADERBOARD_INCREASE
@@ -489,7 +553,7 @@ function _initButtons(){
             class: "list",
             click: function(){
                 
-                const user = viewers[i][0];
+                const user = this.id;
                 const userVal = clicked[user];
                 const currClickedVal = clicked[currentClicked];
                 if(currentClicked != undefined){
@@ -500,7 +564,7 @@ function _initButtons(){
                 if(userVal == undefined){
     
                     _createRequest(LONG_STATS, displayIndividual, {
-                        "viewerQueriedFor": viewers[i][0]
+                        "viewerqueriedfor": this.id
                     });
                     currentClicked = user;
                 }
@@ -543,7 +607,7 @@ function _initButtons(){
  * @param {!Object<*>} [{}] additionalArgs Additional headers to add to
  *                          request if needed.
  */
-function _createRequest(path, callback=undefined, additionalArgs={}){
+function _createRequest(path, callback, additionalArgs={}){
 
     const reqHeaders = {
         "extension-jwt": authorization.token
@@ -568,6 +632,17 @@ function _createRequest(path, callback=undefined, additionalArgs={}){
     $.ajax(settings);
 
 };
+
+/** Hides and shows appropriate buttons upon removing search results. */
+function _back(){
+    prevDisplay = 0;
+    viewersSaved = undefined;
+    recentText = undefined;
+    clickedSaved = undefined;
+    currentClicked = undefined;
+    $("#back").toggleClass("hide_button");
+    $("#refresh").toggleClass("hide_button");
+}
 
 /**
  * Sets the global variable "name"

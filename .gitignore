@@ -2,6 +2,7 @@ cpd.sh
 *test*.js
 backend/config.json
 node_modules
+test
 *.pem
 *.txt
 *.log

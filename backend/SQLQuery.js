@@ -70,10 +70,7 @@ log4js.configure({
 });
 const logger = log4js.getLogger("SQL");
 
-
 let pool = undefined;     //Connection pool to MySQL server
-
-let aliveConnections = 0; // Int denoting number of unreleased connections.
 
 /**
  * Creates connection pool to mysql server. Could have just initialized
@@ -122,9 +119,6 @@ function startConnections(){
 function fetchTables(streams, regular, whitelisted){
 
     let toReturn = false;
-
-    // Will always add another alive connection at the start of each function.
-    aliveConnections++;
 
     pool.getConnection(function(err, connection){
 
@@ -177,7 +171,6 @@ function fetchTables(streams, regular, whitelisted){
         }
 
         connection.release();
-        aliveConnections--;
 
     });
 
@@ -188,20 +181,26 @@ function fetchTables(streams, regular, whitelisted){
  * Gets week, month, year, and overall accumulated times for each person.
  * @param {string} stream Channel id of streamer to fetch data for.
  * @param {string} viewerUsername Name of user to get stats for.
+ * @param {boolean} isWhitelisted Whether or not viewer is whitelisted.
  * @param {ServerResponse} res Server response object used to send payload
  *                         received from the MySQL server to the client.
  * @return {boolean} Returns true if error occurred. False otherwise.
  * @export
  */
-function fetchLongTable(channelId, viewerUsername, res){
+function fetchLongTable(channelId, viewerUsername, isWhitelisted, res){
 
     let toReturn = false;
 
     // Label tables to identify
-    const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
     const graphTable = sql.raw(channelId + _GRAPH_SUFFIX);
+    let table = undefined;
+    if(isWhitelisted){
+        table = sql.raw(channelId + _WHITELIST_SUFFIX);
+    }
+    else{
+        table = sql.raw(channelId + _REGULAR_SUFFIX);
 
-    aliveConnections++;
+    }
 
     pool.getConnection(function(err, connection){
     
@@ -214,7 +213,7 @@ function fetchLongTable(channelId, viewerUsername, res){
         const responsePayload = {}
         connection.query("SELECT username, week, month, year, all_time FROM ? "
                 + "WHERE username=?;", 
-                [regTable, viewerUsername], function(error, results, fields){
+                [table, viewerUsername], function(error, results, fields){
     
             if(_assertError(error, connection, res)){
                 toReturn = true;
@@ -242,7 +241,6 @@ function fetchLongTable(channelId, viewerUsername, res){
 
         });
 
-        aliveConnections--;
         connection.release();
     });
 
@@ -267,7 +265,6 @@ function fetchPeriodTimes(channelId, period, res){
     const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
     const graphTable = sql.raw(channelId + _GRAPH_SUFFIX);
     const periodRaw = sql.raw(period);
-    aliveConnections++;
 
     pool.query("SELECT username, ? from ?;", [periodRaw, regTable], 
             function(err, results, fields){
@@ -301,7 +298,6 @@ function addStreamerTable(channelId){
 
     const channelIdRegular = sql.raw(channelId + _REGULAR_SUFFIX);
     const whitelistId = sql.raw(channelId + _WHITELIST_SUFFIX);
-    aliveConnections++;
 
     pool.getConnection(function(err, connection){
 
@@ -341,7 +337,6 @@ function addStreamerTable(channelId){
         });
 
         connection.release();
-        aliveConnections--;
 
     });
 
@@ -374,15 +369,11 @@ function addViewer(channelId, viewerId, viewerUsername, times=[0, 0, 0, 0],
     else{
         channelId = sql.raw(channelId + _REGULAR_SUFFIX);
     }
-
-    aliveConnections++;
     
     pool.query("INSERT INTO ? VALUES (?, ?, ?);",
             [channelId, viewerId, viewerUsername, times], 
             function(error){
             
-        aliveConnections--;
-
         if(_assertConnectionError(error)){
             toReturn = true;
             return;
@@ -413,16 +404,17 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
     const regTable = sql.raw(channelId + _REGULAR_SUFFIX);
     const whitelistTable = sql.raw(channelId + _WHITELIST_SUFFIX);
     let removeFrom = undefined;
+    let insertInto = undefined;
 
     if(whitelisted){
         removeFrom = whitelistTable;
+        insertInto = regTable;
     }
     else{
         removeFrom = regTable;
+        insertInto = whitelistTable;
     }
 
-    aliveConnections++;
-    
     pool.getConnection(function(err, connection){
        
         if(_assertConnectionError(err)){
@@ -433,26 +425,37 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
         // Initialize array to insert all times in.
         const times = [];
         let viewerId = undefined;
-        connection.query("SELECT * FROM ? WHERE viewerUsername=?;",
+        connection.query("SELECT * FROM ? WHERE username=?;",
                 [removeFrom, viewerUsername], function(error, results, fields){
-            
-             if(_assertError(error, connection)){
-                toReturn = true;
-                return;
-             }
+           
+            if(_assertError(error, connection)){
+               toReturn = true;
+               return;
+            }
+               
+            const row = results[0];
 
-             const row = results[0];
+            // Insert all times in times array.
+            times.push(row.week);
+            times.push(row.month);
+            times.push(row.year);
+            times.push(row.all_time);
+            viewerId = row.id;
 
-             // Insert all times in times array.
-             times.push(row.week);
-             times.push(row.month);
-             times.push(row.year);
-             times.push(row.all_time);
-             viewerId = row.id;
+            // Insert into new table.
+            connection.query("INSERT INTO ? VALUES (?, ?, ?);", 
+                    [insertInto, viewerId, viewerUsername, times], 
+                    function(error){
+
+                if(_assertError(error, connection)){
+                    toReturn = true;
+                    return;
+                }
+            });
         });
 
         // Remove from previous table.
-        connection.query("DELETE FROM ? WHERE viewerUsername=?;", 
+        connection.query("DELETE FROM ? WHERE username=?;", 
                 [removeFrom, viewerUsername], function(error){
         
             if(_assertError(error, connection)){
@@ -461,18 +464,8 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
             }
         });
 
-        // Insert into new table.
-        connection.query("INSERT INTO ? VALUES (?, ?, ?);", 
-                [viewerId, viewerUsername, times], function(error){
-
-            if(_assertError(error, connection)){
-                toReturn = true;
-                return;
-            }
-        });
 
         connection.release();
-        aliveConnections--;
     });
 
     return toReturn;
@@ -489,21 +482,17 @@ function createStreamerList(){
 
     let toReturn = false;
 
-    aliveConnections++;
-
     pool.query("CREATE TABLE list_of_streamers(channel_id VARCHAR(50), "
             + "PRIMARY KEY(channel_id));", function(error){
         
 
         if(error && error.message == json.tableExists){
-            aliveConnections--;
             return;
         }
         else if(_assertConnectionError(error)){
             toReturn = true;
             return;
         }
-        aliveConnections--;
 
     });
 
@@ -521,8 +510,6 @@ function updateStreamerList(channelId){
 
     let toReturn = false;
 
-    aliveConnections++;
-
     const query = "INSERT INTO list_of_streamers VALUES (?);";
     const args = [channelId];
 
@@ -533,7 +520,6 @@ function updateStreamerList(channelId){
             toReturn = true;
             return;
        }
-       aliveConnections--;
 
     });
 
@@ -552,8 +538,6 @@ function fetchStreamerList(callback, ...args){
 
     let toReturn = false;
 
-    aliveConnections++;
-
     pool.query("SELECT channel_id FROM list_of_streamers;",
             function(error, results, fields){
 
@@ -562,7 +546,6 @@ function fetchStreamerList(callback, ...args){
             toReturn = true;
             return;
         }
-        aliveConnections--;
 
         // Begin populating array with results from query
         const toPopulate = [];
@@ -591,7 +574,6 @@ function createGraphTable(channelId){
     let toReturn = false;
 
     channelId = sql.raw(channelId + _GRAPH_SUFFIX);
-    aliveConnections++;
 
     pool.query("CREATE TABLE ?(id VARCHAR(50) NOT NULL UNIQUE, " 
             + "username VARCHAR(50) NOT NULL UNIQUE, PRIMARY KEY(username));", 
@@ -602,7 +584,6 @@ function createGraphTable(channelId){
             toReturn = true;
             return;
         }
-        aliveConnections--;
     });
 
     return toReturn;
@@ -629,7 +610,6 @@ function updateGraphTable(channelId, times){
             `${today.getMonth()}_${today.getDate()}_${today.getFullYear()}`);
 
     channelId = sql.raw(channelId + _GRAPH_SUFFIX);
-    aliveConnections++;
 
     pool.getConnection(function(err, connection){
 
@@ -664,7 +644,6 @@ function updateGraphTable(channelId, times){
             });
         }
 
-        aliveConnections--;
         connection.release();
 
     });
@@ -687,7 +666,6 @@ function addViewerGraphTable(channelId, viewerId, viewerUsername){
     let toReturn = false;
 
     channelId = sql.raw(channelId + _GRAPH_SUFFIX);
-    aliveConnections++;
 
     pool.query("INSERT INTO ? (id, username) VALUES (?, ?);",
             [channelId, viewerId, viewerUsername], function(err){
@@ -697,7 +675,6 @@ function addViewerGraphTable(channelId, viewerId, viewerUsername){
             toReturn = true;
             return;
         }
-        aliveConnections--;
     });
 
     return toReturn;
@@ -709,8 +686,6 @@ function addViewerGraphTable(channelId, viewerId, viewerUsername){
  * @export
  */
 function clearWeek(){
-
-    aliveConnections++;
 
     pool.getConnection(function(err, connection){
 
@@ -737,7 +712,7 @@ function clearWeek(){
         });
 
         connection.query("UPDATE ?, ? SET week=0;", 
-                [streamerReg, streamerWhitelist], function(error){
+                [streamersReg, streamerWhitelist], function(error){
                 
             if(_assertError(error)){
                 return;
@@ -745,7 +720,6 @@ function clearWeek(){
 
         });
 
-        aliveConnections--;
         connection.release();
 
     });
@@ -757,8 +731,6 @@ function clearWeek(){
  * @export
  */
 function clearMonth(){
-
-    aliveConnections++;
 
     pool.getConnection(function(err, connection){
 
@@ -785,7 +757,7 @@ function clearMonth(){
         });
 
         connection.query("UPDATE ?, ? SET month=0;", 
-                [streamerReg, streamerWhitelist], function(error){
+                [streamersReg, streamerWhitelist], function(error){
                 
             if(_assertError(error)){
                 return;
@@ -793,7 +765,6 @@ function clearMonth(){
 
         });
 
-        aliveConnections--;
         connection.release();
 
     });
@@ -817,8 +788,6 @@ function clearMonth(){
 function updateTime(regular, whitelisted){
 
     let toReturn = false;
-
-    aliveConnections++;
 
     pool.getConnection(function(err, connection){
         
@@ -888,7 +857,6 @@ function updateTime(regular, whitelisted){
         }
 
         connection.release();
-        aliveConnections--;
 
     });
 
@@ -901,32 +869,21 @@ function updateTime(regular, whitelisted){
  * @export
  */
 function endConnections(){
- 
-    // Periodically check if there are any more alive connections.
-    let wait = setInterval(function(){
-        
-        // Once all connections are released clear the interval and end the
-        // pool.
-        if(aliveConnections == 0){
    
-            if(pool == undefined){
-                clearInterval(wait);
-                log4js.shutdown(function(){});
-            }
+    if(pool == undefined){
+        log4js.shutdown(function(){});
+        return;
+    }
 
-            pool.end(function(err){
+    pool.end(function(err){
 
-                clearInterval(wait);
-                
-                if(err){
-                    logger.error(error.message);
-                }
-
-                log4js.shutdown(function(){});
-
-            });
+        if(err){
+            logger.error(error.message);
         }
-    }, json.exitCheck);
+
+        log4js.shutdown(function(){});
+
+    });
 }
 
 /**
@@ -959,7 +916,7 @@ function _parsePeriodTimes(res, period){
  */
 function _assertError(err, connection, res=undefined){
     if(err){
-        aliveConnections--;
+
         try{
             connection.release();
         }
@@ -986,7 +943,6 @@ function _assertError(err, connection, res=undefined){
  */
 function _assertConnectionError(err, res=undefined){
     if(err){
-        aliveConnections--;
         if(res != undefined){
             res.writeHead(json.badRequest);
             res.end();
