@@ -37,7 +37,6 @@
     "apiPath": "/helix/users?id=",
     "webhookPath": "/helix/webhooks/hub",
     "tokenPath": "/oauth2/token",
-    "tokenRefreshPath": "/oauth2/token--data-urlencode",
 
     "alg": "YOUR_PREFERRED_ENCRYPTION_ALGORITHM_HERE",
 

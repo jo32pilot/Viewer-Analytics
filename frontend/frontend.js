@@ -92,6 +92,12 @@ const MAX_GRAPH_DISPLAY = 10;
  */
 const REQ_KEY_ARR_LEN = 12;
 
+/**
+ * Number of milliseconds to wait before retrying request creation.
+ * @const
+ */
+const RETRY_OFFSET = 3000;
+
 //---------- SETTUP ----------//
 
 /**
@@ -161,28 +167,34 @@ window.Twitch.ext.onAuthorized(function(auth){
    
     authorization = auth;
 
-    _createRequest(INITIAL_BOARD, initBoard);
+    _createRequest(INITIAL_BOARD, initBoard, {
+        "paused": paused
+    });
 
 });
 
 // Define onContext event
 window.Twitch.ext.onContext(function(cxt, changeArr){
-   
+  
     // If user is not paused, unpause tracker on the server.
-    if(paused && cxt["isPaused"] == false){
+    if(paused && cxt["isPaused"] == false && name != ""){
         _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
-            "paused": false
+            "paused": false,
+            "viewerqueriedfor": name
         });
         paused = false;
     }
 
     // If user is paused, pause tracker on the server.
-    else if(!paused && cxt["isPaused"] == true){
+    else if(!paused && cxt["isPaused"] == true && name != ""){
         _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
-            "paused": true
+            "paused": true,
+            "viewerqueriedfor": name
         });
         paused = true;
     }
+
+    paused = cxt["isPaused"];
 
     // Toggle dark and light css themes.
     if(cxt["theme"] == "light"){
@@ -196,7 +208,6 @@ window.Twitch.ext.onContext(function(cxt, changeArr){
     }
 
 });
-
 
 $("#refresh").on("click", refresh);
 
@@ -288,10 +299,14 @@ $("#search").submit(function(ev){
 // tracker.
 $(window).on("beforeunload", function(){
 
-    _createRequest(TOGGLE_TRACKER, undefined, addititionalArgs={
-        "paused": true
-    });
+    if(name != ""){
 
+        _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
+            "paused": true,
+            "viewerqueriedfor": name
+        });
+
+    }
 });
 
 // Event listener that detects the scrolling to the bottom of a page.
@@ -320,10 +335,9 @@ function initBoard(res, status=undefined, jqXHR=undefined){
     // Disable all buttons until finished initBoard.
     $(":button").prop("disabled", true);
 
-    if(jqXHR != undefined && name == undefined){
+    if(jqXHR != undefined){
         _setName(jqXHR.getResponseHeader("name"));
     }
-    // TODO or if broadcaster
     if(name == undefined){
         const popUp = $("<div/>", {
             id: "id_off"
@@ -344,6 +358,7 @@ function initBoard(res, status=undefined, jqXHR=undefined){
         }));
 
         $("body").append(popUp);
+        _setName("");
     }
 
     $("#leaderboard").scrollTop(0);
@@ -476,7 +491,7 @@ function displayIndividual(res, status, jqXHR){
     });
 
     // If this user is a broadcaster, then display the whitelist button.
-    if(jqXHR.getResponseHeader("broadcaster")){
+    if(jqXHR.getResponseHeader("broadcaster") == "true"){
 
         // Initialize button.
         const toggleWhitelist = $("<button/>", {
@@ -522,6 +537,10 @@ function displayIndividual(res, status, jqXHR){
  * Refreshes leaderboard with updated viewer times
  */
 function refresh(){
+
+    if(authorization == undefined){
+        console.log("Authorization undefined.");
+    }
 
     _createRequest(GET_PERIOD, initBoard, additionalArgs={
         "period": period
@@ -609,9 +628,15 @@ function _initButtons(){
  */
 function _createRequest(path, callback, additionalArgs={}){
 
-    const reqHeaders = {
-        "extension-jwt": authorization.token
-    };
+    let tryAgain = false;
+    const reqHeaders = {};
+    try{
+        reqHeaders["extension-jwt"] = authorization.token;
+    }
+    catch(err){
+        // Authorization wasn't defined yet.
+        tryAgain = true;
+    }
 
     // Check for additional args.
     for(let arg in additionalArgs){
@@ -629,7 +654,17 @@ function _createRequest(path, callback, additionalArgs={}){
         settings["success"] = callback;
     }
 
-    $.ajax(settings);
+
+    // Sometimes calls are made before token is set. Wait if so.
+    if(tryAgain){
+        setTimeout(function(){
+            reqHeaders["extension-jwt"] = authorization.token;
+            $.ajax(settings);
+        }, RETRY_OFFSET);
+    }
+    else{
+        $.ajax(settings);
+    }
 
 };
 
@@ -649,7 +684,9 @@ function _back(){
  * @param {string} username The viewer's username
  */
 function _setName(username){
-    name = username;
+    if(username != undefined){
+        name = username;
+    }
 }
 
 /**
@@ -671,7 +708,7 @@ function _secondsToFormat(time){
     const minutes = ((time - seconds) / SECONDS) % MINUTES;
     const hours = Math.floor((time - (minutes * MINUTES) - seconds) 
             / SECONDS / MINUTES);
-    return `${hours} H ${minutes} M ${seconds} S`
+    return `${hours} h ${Math.floor(minutes)} m ${Math.floor(seconds)} s`
 
 }
 

@@ -38,6 +38,7 @@ class TimeTracker{
         this.paused = false;
 
         this.tracker = this.startTime();
+        this.prevNow = Date.now();
     }
 
     /**
@@ -47,12 +48,17 @@ class TimeTracker{
      */
     startTime(){
 
+        let thisObj = this;
+
         //Update time every second
         let tracker = setInterval(function(){
-            if(!this.paused){
-                this.time += 1;
-                this.timeNotAdded += 1;
-                this.dailyTime += 1;
+            if(!thisObj.paused === true){
+                let currTime = Date.now();
+                let toAdd = (currTime - thisObj.prevNow) / ONE_SECOND;
+                thisObj.prevNow = currTime;
+                thisObj.time += toAdd;
+                thisObj.timeNotAdded += toAdd;
+                thisObj.dailyTime += toAdd;
             }
         }, ONE_SECOND);
         

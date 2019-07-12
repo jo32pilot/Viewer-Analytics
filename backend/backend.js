@@ -35,11 +35,11 @@ const /** !Object<string, <string, !TimeTracker>> */ whitelisted = {};
 // Tracks daily watch times for graphs.
 const /** !Object<string, <string, int>> */ daily = {};
 
-// Tracks if stream is offline or not. True if online, false otherwise.
-const /** !Object<string, boolean> */ isOnline = {};
+// Tracks if stream is offline or not. Value is the start time if the stream is
+// online. Otherwise undefined.
+const /** !Object<string, string> */ isOnline = {};
 
 let accessToken = "";       // Bearer token for increase API call rates
-let refreshToken = "";      // Token to refresh accessToken when needed
 
 
 // Settup logging
@@ -77,7 +77,7 @@ _assertInitSQLErr(sql.fetchStreamerList(multiStreamWebhook));
 schedule.scheduleJob(json.cronSettings, updateDays);
 
 // Cron schedule to refresh bearerToken
-schedule.scheduleJob(json.cronSettings, refreshBearerToken);
+schedule.scheduleJob(json.cronSettings, getBearerToken);
 
 // Cron schedule to clear weekly times.
 schedule.scheduleJob(json.cronWeekly, sql.clearWeek);
@@ -134,6 +134,7 @@ const server = https.createServer(options, function(req, res){
             if(!trackers.hasOwnProperty(channelId)){
                 trackers[channelId] = {};
                 whitelisted[channelId] = {};
+                singleStreamWebhook(channelId);
                 sql.updateStreamerList(channelId);
                 sql.addStreamerTable(channelId);
                 sql.createGraphTable(channelId);
@@ -176,10 +177,6 @@ const server = https.createServer(options, function(req, res){
                     // changes. So do that.
                     if(requestPayload["role"] == "broadcaster"){
 
-                        if(!channelId in trackers){
-                            singleStreamWebhook(channelId);
-                        }
-
                         if(response != undefined){
                             response = response[0];
                             const displayName = response["display_name"];
@@ -210,24 +207,47 @@ const server = https.createServer(options, function(req, res){
                         sql.addViewerGraphTable(channelId, response["id"], 
                                 displayName);
                         daily[channelId][displayName] = 0;
+                        trackers[channelId][displayName] = undefined;
 
                     }
-
+                    
                     // Must go after if statement, otherwise viewer might never
                     // get a tracker
-                    if(isOnline[channelId]){
+                    if(isOnline[channelId] != undefined){
 
                         // If viewer started watching the stream for the first
-                        // time this session, init a TimeTracker
-                        if(trackers[channelId][displayName] == undefined){
-                            const tracker = new TimeTracker(displayName);
-                            trackers[channelId][displayName] = tracker;
-                        }
-
+                        // time this session, init a TimeTracker.
                         // Otherwise, the probably refreshed or came back after
                         // leaving the site. So unpause their timer.
-                        else{
-                            trackers[channelId][displayName].unpauseTime();
+                        if(trackers[channelId].hasOwnProperty(displayName)){ 
+
+                            if(trackers[channelId][displayName] == undefined){
+
+                                const tracker = new TimeTracker(displayName);
+                                trackers[channelId][displayName] = tracker;
+
+                            }
+                            if(req.headers["paused"] == "true"){
+                                trackers[channelId][displayName].pauseTime();
+                            }
+                            else{
+                                trackers[channelId][displayName].prevNow = Date.now();
+                                trackers[channelId][displayName].unpauseTime();
+                            }
+                        }
+                        else if(whitelisted[channelId][displayName] == 
+                                undefined){
+
+                            const tracker = new TimeTracker(displayName);
+                            whitelisted[channelId][displayName] = tracker;
+
+                            if(req.headers["paused"] == "true"){
+                                whitelisted[channelId][displayName].pauseTime();
+                            }
+                        }
+                        else if(req.headers["paused"] != "true"){
+                            whitelisted[channelId][displayName].prevNow = Date.now();
+                            whitelisted[channelId][displayName].unpauseTime();
                         }
 
                     }
@@ -463,16 +483,18 @@ const server = https.createServer(options, function(req, res){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
-            const viewer = requestPayload["viewerqueriedfor"];
+            const viewer = req.headers["viewerqueriedfor"];
             const channelId = requestPayload["channel_id"];
 
             // Viewer unpaused the stream. Start accumulating time again.
-            if(requestPayload["paused"] == false){
+            if(req.headers["paused"] == "false"){
 
-                if(trackers.hasOwnProperty(viewer)){
+                if(trackers[channelId][viewer] != undefined){
+                    trackers[channelId][viewer].prevNow = Date.now();
                     trackers[channelId][viewer].unpauseTime();
                 }
-                else{
+                else if(whitelisted[channelId][viewer] != undefined){
+                    whitelisted[channelId][viewer].prevNow = Date.now();
                     whitelisted[channelId][viewer].unpauseTime();
                 }
 
@@ -481,8 +503,7 @@ const server = https.createServer(options, function(req, res){
             // User paused the stream. Stop accumulating time.
             else{
                
-                if(trackers.hasOwnProperty(viewer) &&
-                        trackers[channelId][viewer] != undefined){
+                if(trackers[channelId][viewer] != undefined){
                     trackers[channelId][viewer].pauseTime();
                 }
                 else if(whitelisted[channelId][viewer] != undefined){
@@ -562,41 +583,39 @@ const server = https.createServer(options, function(req, res){
 
             if(incoming[1] == hash){
 
-                // Parse query string into object format.
-                let data = JSON.parse(body)["data"][0];
-
-                // An empty array means the streamer offline. So if we don't
-                // have an empty array, then there's nothing to do.
-                if(data != []){
-                    isOnline[urlSplit[json.pathChannelIdIndex]] = true;
-                    return;
-                }
-
-                isOnline[urlSplit[json.pathChannelIdIndex]] = false;
-
                 // user_id is apparently the same as channel_id. Wish I'd known
                 // that earlier.
                 const channelId = urlSplit[json.pathChannelIdIndex];
-                const channelTrack = trackers[channelId];
-                const whitelistTrack = whitelisted[channelId];
 
-                // update all appropriate times from trackers and whitelisted
-                // in the broadcaster's SQL tables.
-                sql.updateTime(trackers, whitelisted);
+                // Parse query string into object format.
+                let data = JSON.parse(body)["data"][0];
+
+                // If stream is online
+                if(data != undefined){
+                   
+                    // Check if new session started.
+                    if(data["started_at"] != 
+                            isOnline[urlSplit[json.pathChannelIdIndex]]){
+
+                        // Settup for new session.
+                        isOnline[urlSplit[json.pathChannelIdIndex]] = 
+                                data["started_at"];
+                        for(let user in trackers[channelId]){
+                            trackers[channelId][user] = undefined;
+                        }
+                        for(let user in whitelisted[channelId]){
+                            whitelisted[channelId][user] = undefined;
+                        }
+                    }
+
+                    return;
+                }
+
+                isOnline[urlSplit[json.pathChannelIdIndex]] = undefined;
 
                 // Update daily times which will be added to the MySQL server
-                // at the end of the day. Then remove references to trackers.
-                for(let viewer in trackers[channelId]){
-                    daily[channelId][viewer] += channelTrack[viewer].dailyTime;
-                    channelTrack[viewer].stopTime();
-                    channelTrack[viewer] = undefined;
-                }
-                for(let viewer in whitelisted[channelId]){
-                    daily[channelId][viewer] += whitelistTrack[viewer].
-                            dailyTime;
-                    whitelistTrack[viewer].stopTime();
-                    whitelistTrack[viewer] = undefined;
-                }
+                // at the end of the day. 
+                updateDaily(channelId, false);
 
                 logger.info(`Channel ${channelId} went offline.`);
 
@@ -624,34 +643,59 @@ const server = https.createServer(options, function(req, res){
  */
 function updateDays(){
 
-    for(let channel in daily){
+    for(let channelId in daily){
 
-        for(let viewer in trackers[channel]){
-
-            // If the viewer has a TimeTracker attached to them, reset that
-            // tracker's daily time to 0.
-            if(trackers[channel][viewer] != undefined){
-                daily[channel][viewer] += trackers[channel][viewer].dailyTime;
-                trackers[channel][viewer].dailyTime = 0;
-            }
-
-        }
-
-        // Same thing for those whitelisted.
-        for(let viewer in whitelisted[channel]){
-
-            if(whitelisted[channel][viewer] != undefined){
-                daily[channel][viewer] += whitelisted[channel][viewer].dailyTime;
-                whitelisted[channel][viewer].dailyTime = 0;
-            }
-
-        }
+        updateDaily(channelId);
 
         // Pass in each channel to SQL function to update.
-        sql.updateGraphTable(channel, daily[channel]);
+        sql.updateGraphTable(channelId, daily[channelId]);
     }
+
+    // update all appropriate times from trackers and whitelisted
+    // in the broadcaster's SQL tables.
+    sql.updateTime(trackers, whitelisted);
 }
 
+/**
+ * Updates "daily" object with "dailyTime" field from TimeTrackers for a 
+ * specific channel. 
+ * @param {string} channelId Id of channel to updates times for.
+ * @param {boolean} online [true] If stream is online. Determines whether or not
+ *                  to stop TimeTrackers. Stops TimeTrackers if false.
+ */
+function updateDaily(channelId, online=true){
+    
+    for(let viewer in trackers[channelId]){
+
+        const userVal = trackers[channelId][viewer];
+
+        // If the viewer has a TimeTracker attached to them, reset that
+        // tracker's daily time to 0.
+        if(userVal != undefined){
+            
+            daily[channelId][viewer] += userVal.dailyTime;
+            userVal.dailyTime = 0;
+            if(!online){
+                userVal.stopTime();
+            }
+        }
+    }
+
+    // Same thing for those whitelisted.
+    for(let viewer in whitelisted[channelId]){
+
+        const userVal = whitelisted[channelId][viewer];
+
+        if(userVal != undefined){
+            daily[channelId][viewer] += userVal.dailyTime;
+            userVal.dailyTime = 0;
+            if(!online){
+                userVal.stopTime();
+            }
+        }
+    }
+
+}
 
 /**
  * Subscribes to broadcast changes for the specified broadcaster. If
@@ -659,7 +703,7 @@ function updateDays(){
  * @param {String} broadcasterId Unique of of broadcaster to monitor.
  */
 function singleStreamWebhook(broadcasterId){
-    
+   
     const topic = encodeURIComponent(json.streamTopicURL + broadcasterId);
     const callback = encodeURIComponent(`${json.webServerURL}:${json.https}`
             + `${json.stopTracker}/${broadcasterId}`);
@@ -756,8 +800,7 @@ function getBearerToken(){
                 logger.error(`Invalid attempt - getBearerToken: `
                         + `${data["status"]}: ${data["message"]}`);
             }
-            accessToken = data["access_token"],
-            refreshToken = data["refresh_token"]
+            accessToken = data["access_token"];
         });
 
     });
@@ -768,57 +811,6 @@ function getBearerToken(){
 
     req.end();
 }
-
-/**
- * Refreshes bearer token as it expires after some time. Refreshes everyday.
- */
-function refreshBearerToken(){
-
-    const refreshPath = `${json.tokenRefreshPath}`
-            + `?grant_type=refresh_token`
-            + `&refresh_token=${refreshToken}`
-            + `&client_id=${json.clientId}`
-            + `&client_secret=${json.clientSecret}`;
-
-    const reqOptions = {
-        "host": json.tokenURL,
-        "path": refreshPath,
-        "method": "POST",
-    };
-
-    const req = https.request(reqOptions, function(res){
-
-        let data = "";
-        res.on("data", function(chunk){
-            data += chunk;
-
-            // Either something went wrong or someone is attempting
-            // to overflow the server.
-            if(data.length > 1e6){
-                logger.fatal(`Overflow attempt - refreshBearerToken: `
-                        + `ORIGIN: ${req["Origin"]}`);
-                request.connection.destroy();
-            }
-        });
-
-        // Sets accessToken and refreshToken for use later.
-        res.on("end", function(){
-            logger.info(`Access token refreshed`);
-            data = JSON.parse(data);
-            accessToken = data["access_token"],
-            refreshToken = data["refresh_token"]
-         });
-
-    });
-
-    req.on("error", function(err){
-        logger.error(`Failed attempt - refreshBearerToken: ${err.message}`);
-    });
-
-    req.end();
-
-}
-
 
 /**
  * Helper function to parse times from trackers and whitelisted objects.
