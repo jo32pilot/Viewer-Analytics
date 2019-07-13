@@ -406,7 +406,7 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
     let removeFrom = undefined;
     let insertInto = undefined;
 
-    if(whitelisted){
+    if(whitelisted){    
         removeFrom = whitelistTable;
         insertInto = regTable;
     }
@@ -428,11 +428,12 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
         connection.query("SELECT * FROM ? WHERE username=?;",
                 [removeFrom, viewerUsername], function(error, results, fields){
            
+
             if(_assertError(error, connection)){
                toReturn = true;
                return;
             }
-               
+
             const row = results[0];
 
             // Insert all times in times array.
@@ -605,9 +606,10 @@ function updateGraphTable(channelId, times){
     let toReturn = false;
 
     // Get todays date to create new column in table
-    const today = new Date();
+    let today = new Date();
     today = sql.raw(
-            `${today.getMonth()}_${today.getDate()}_${today.getFullYear()}`);
+            `${today.getMonth() + 1}_${today.getDate()}_` 
+            + `${today.getFullYear()}`);
 
     channelId = sql.raw(channelId + _GRAPH_SUFFIX);
 
@@ -796,18 +798,17 @@ function updateTime(regular, whitelisted){
             return;
         }
 
-
         // Update all times with current session time.
         // Index by username which are also unique.
-        query = "UPDATE ? SET week=? + (SELECT week), "
+        let query = "UPDATE ? SET week=? + (SELECT week), "
                 + "month=? + (SELECT month), year=? + (SELECT year), "
                 + "all_time=? + (SELECT all_time) WHERE username=?;";
 
         // Go through each stream
         for(let stream in regular){
 
-            streamRaw = sql.raw(stream + _REGULAR_SUFFIX);
-            whitelistRaw = sql.raw(stream + _WHITELIST_SUFFIX);
+            let streamRaw = sql.raw(stream + _REGULAR_SUFFIX);
+            let whitelistRaw = sql.raw(stream + _WHITELIST_SUFFIX);
 
             // Go through each person not whitelisted
             for(let viewer in regular[stream]){
@@ -819,11 +820,11 @@ function updateTime(regular, whitelisted){
 
                 // Gets times not yet added to the table then resets them
                 // back to 0.
-                sessionTime = regular[stream][viewer].timeNotAdded;
+                let sessionTime = regular[stream][viewer].timeNotAdded;
                 regular[stream][viewer].timeNotAdded = 0;
-                queryArgs = [streamRaw, sessionTime, sessionTime,
+                let queryArgs = [streamRaw, sessionTime, sessionTime,
                              sessionTime, sessionTime, viewer];
-                
+               
                 connection.query(query, queryArgs, function(error){
                  
                     if(_assertError(err, connection)){
@@ -833,16 +834,16 @@ function updateTime(regular, whitelisted){
 
                 });
             }
-
+    
             // Go through each whitelisted person and do the same thing.
             for(let viewer in whitelisted[stream]){
                 
-                if(regular[stream][viewer] == undefined){
+                if(whitelisted[stream][viewer] == undefined){
                     continue;
                 }
-                sessionTime = whitelisted[stream][viewer].timeNotAdded;
+                let sessionTime = whitelisted[stream][viewer].timeNotAdded;
                 whitelisted[stream][viewer].timeNotAdded = 0;
-                queryArgs = [whitelistRaw, sessionTime, sessionTime,
+                let queryArgs = [whitelistRaw, sessionTime, sessionTime,
                              sessionTime, sessionTime, viewer];
 
                 connection.query(query, queryArgs, function(error){
