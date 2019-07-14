@@ -1,7 +1,7 @@
 body {
     background-color: #201c2b;
     color: #e5e3e8;
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-family: "Helvetica Neue", Helvetica, Arial, Sans-Serif;
 }
 
 #board_top {
@@ -16,6 +16,7 @@ body {
 #id_off {
     animation: expand .5s;
     background-color: #342b4d;
+    border-radius: 15px;
     left: calc(50% - 129px);
     overflow: hidden;
     padding: 10px;
@@ -35,6 +36,7 @@ body {
 }
 
 #close_pop {
+    background-color: inherit;
     float: right;
 }
 
@@ -95,12 +97,12 @@ body {
 
 .list {
     background-color: #2e293d;
-
-    /* Box shadw creates a line under each element */
     color: inherit;
-    height: 20.24px;
     margin-top: -2.5px;
-    padding: .5px;
+    padding-bottom: 1px;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 1px;
     width: 318px;
 }
 
@@ -193,6 +195,6 @@ button:active {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #312b52;
+    background: #342b4d;
     border-radius: 15px;
 }

@@ -1,6 +1,6 @@
 body {
     background-color: #fff;
-    color: #232127;
+    color: #e5e3e8;
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
@@ -15,7 +15,8 @@ body {
 
 #id_off {
     animation: expand .5s;
-    background-color: #ffffff;
+    background-color: #6441a4;
+    border-radius: 15px;
     left: calc(50% - 129px);
     overflow: hidden;
     padding: 10px;
@@ -35,12 +36,14 @@ body {
 }
 
 #close_pop {
+    background-color: inherit;
     float: right;
 }
 
 /* Title properties */
 
 #title {
+    color: #232127;
     font-size: 15px;
     padding: 7px;
     text-align: center;
@@ -63,7 +66,7 @@ body {
 #search {
     background-color: inherit;
     border: 0;
-    color: inherit;
+    color: #232127;
     outline: 0;
     padding: 2px;
     width: 230px;
@@ -95,12 +98,12 @@ body {
 
 .list {
     background-color: #7b57bd;
-
-    /* Box shadw creates a line under each element */
     color: inherit;
-    height: 20.24px;
     margin-top: -2.5px;
-    padding: .5px;
+    padding-bottom: 1px;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 1px;
     width: 318px;
 }
 
@@ -167,20 +170,20 @@ button:active {
     width: 318px;
 }
 
-/* Individual view */
-
-.individual_view {
-    display: none;
-    height: 250px;
-    left: calc(50% - 159px);
-    width: 313px;
-}
-
 .list_toggle {
     background-color: #6441a4;
     float: right;
     height: 30px;
+}
 
+/* Individual view */
+
+.individual_view {
+    color: #232127;
+    display: none;
+    height: 250px;
+    left: calc(50% - 159px);
+    width: 313px;
 }
 
 /* Scroll bar */

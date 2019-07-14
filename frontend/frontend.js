@@ -338,6 +338,8 @@ function initBoard(res, status=undefined, jqXHR=undefined){
     if(jqXHR != undefined){
         _setName(jqXHR.getResponseHeader("name"));
     }
+
+    // Id sharing not on, notify viewer
     if(name == undefined){
         const popUp = $("<div/>", {
             id: "id_off"
@@ -350,7 +352,7 @@ function initBoard(res, status=undefined, jqXHR=undefined){
                     + "The streamer is not shown on the board.</p>";
         popUp.append(text);
         popUp.prepend($("<button/>", {
-            text: "x",
+            text: "X",
             id: "close_pop",
             click: function(){
                 popUp.remove();
@@ -362,11 +364,9 @@ function initBoard(res, status=undefined, jqXHR=undefined){
     }
 
     $("#leaderboard").scrollTop(0);
-
     $("#leaderboard").empty();
     currentDisplay = 0;
 
-    // Parse response string into JSON.
     res = JSON.parse(res);
     
     viewers = res["viewers"];
@@ -439,12 +439,15 @@ function displayIndividual(res, status, jqXHR){
 
     // Format the data
     const statsFormatted = $("<div/>", {
-        text: `Week: ${longStats["week"]}\n`
-                + `Month: ${longStats["month"]}\n`
-                + `Year: ${longStats["year"]}\n`
-                + `Overall: ${longStats["all_time"]}`,
         class: "info_string"
     });
+
+    const info = `<span class="order_align">Week: ${longStats["week"]}<br>`
+            + `Year: ${longStats["year"]}</span>`
+            + `<span class="time_align">Month: ${longStats["month"]}<br>`
+            + `Overall: ${longStats["all_time"]}</span>`;
+
+    statsFormatted.html(info);
 
     // Show if user is whitelisted or not.
     const whitelistText = $("<div/>", {
