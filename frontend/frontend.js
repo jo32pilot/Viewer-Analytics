@@ -442,10 +442,10 @@ function displayIndividual(res, status, jqXHR){
         class: "info_string"
     });
 
-    const info = `<span class="order_align">Week: ${longStats["week"]}<br>`
-            + `Year: ${longStats["year"]}</span>`
-            + `<span class="time_align">Month: ${longStats["month"]}<br>`
-            + `Overall: ${longStats["all_time"]}</span>`;
+    const info = `<span class="order_align">Week: ${longStats["week"]} h<br>`
+            + `Year: ${longStats["year"]} h</span>`
+            + `<span class="time_align">Month: ${longStats["month"]} h<br>`
+            + `Overall: ${longStats["all_time"]} h</span>`;
 
     statsFormatted.html(info);
 

@@ -202,7 +202,8 @@ const server = https.createServer(options, function(req, res){
 
                     // If viewer can't be found in the channel's trackers, add
                     // them to it and the SQL tables.
-                    if(!trackers[channelId].hasOwnProperty(displayName)){
+                    if(!trackers[channelId].hasOwnProperty(displayName) && 
+                            !whitelisted[channelId].hasOwnProperty(displayName)){
                         sql.addViewer(channelId, response["id"], displayName);
                         sql.addViewerGraphTable(channelId, response["id"], 
                                 displayName);
@@ -223,7 +224,7 @@ const server = https.createServer(options, function(req, res){
 
                             if(trackers[channelId][displayName] == undefined){
 
-                                const tracker = new TimeTracker(displayName);
+                                const tracker = new TimeTracker(response["id"]);
                                 trackers[channelId][displayName] = tracker;
 
                             }
@@ -238,7 +239,7 @@ const server = https.createServer(options, function(req, res){
                         else if(whitelisted[channelId][displayName] == 
                                 undefined){
 
-                            const tracker = new TimeTracker(displayName);
+                            const tracker = new TimeTracker(response["id"]);
                             whitelisted[channelId][displayName] = tracker;
 
                             if(req.headers["paused"] == "true"){
@@ -485,15 +486,48 @@ const server = https.createServer(options, function(req, res){
                     payloadObj;
             const viewer = req.headers["viewerqueriedfor"];
             const channelId = requestPayload["channel_id"];
+            let isWhitelisted = false;
+
+            // Check if request from actualy from the client that's being 
+            // paused.
+            if(trackers[channelId][viewer] != undefined){
+                if(requestPayload["user_id"] != 
+                        trackers[channelId][viewer].user){
+                    res.writeHead(json.forbidden);
+                    res.end();
+                    logger.info(`Illegal attempt: User ID does not match - `
+                            + `toggleTracker: ${req["headers"]}`);
+                    return;
+                }
+            }
+
+            else if(whitelisted[channelId][viewer] != undefined){
+                if(requestPayload["user_id"] != 
+                        whitelisted[channelId][viewer].user){
+                    res.writeHead(json.forbidden);
+                    res.end();
+                    logger.info(`Illegal attempt: User ID does not match - `
+                            + `toggleTracker: ${req["headers"]}`);
+                    return;
+                }
+                isWhitelisted = true;
+            }
+
+            // User doesn't exist
+            else{
+                res.writeHead(json.notFound);
+                res.end();
+                return;
+            }
 
             // Viewer unpaused the stream. Start accumulating time again.
             if(req.headers["paused"] == "false"){
 
-                if(trackers[channelId][viewer] != undefined){
+                if(!isWhitelisted){
                     trackers[channelId][viewer].prevNow = Date.now();
                     trackers[channelId][viewer].unpauseTime();
                 }
-                else if(whitelisted[channelId][viewer] != undefined){
+                else{
                     whitelisted[channelId][viewer].prevNow = Date.now();
                     whitelisted[channelId][viewer].unpauseTime();
                 }
@@ -503,10 +537,10 @@ const server = https.createServer(options, function(req, res){
             // User paused the stream. Stop accumulating time.
             else{
                
-                if(trackers[channelId][viewer] != undefined){
+                if(!isWhitelisted){
                     trackers[channelId][viewer].pauseTime();
                 }
-                else if(whitelisted[channelId][viewer] != undefined){
+                else{
                     whitelisted[channelId][viewer].pauseTime();
                 }
 
