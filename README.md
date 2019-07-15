@@ -1,6 +1,6 @@
 # Viewer Analytics
 Viewer Analytics is a Twitch panel extension that displays viewer watch habits.\
-![](assets/staticBoard.png)\
+![](assets/staticBoard.png)
 
 ## Capabilities
 - Places viewers on a leaderboard based on time spent watching the streamer.
@@ -11,6 +11,7 @@ Viewer Analytics is a Twitch panel extension that displays viewer watch habits.\
 - Streamers can whitelist their viewers, effectively hiding them from normal
   viewing on the leaderboard.
 - Search functionality allows users to look up any user, even those whitelisted.
+![](assets/gifBoard.gif)
 
 # Testing Locally
 If you want to test the server locally, you're going to need an SSL certificate 

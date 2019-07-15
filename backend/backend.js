@@ -852,7 +852,7 @@ function checkWebhooks(){
                 let expires = new Date(exYear, exMonth - 1, exDate);
 
                 // If date difference is past a threshold, must renew.
-                if(dateDifference(date, expires) =< json.renewalDays){
+                if(dateDifference(date, expires) <= json.renewalDays){
                     toRenew.push((webhook["callback"].split(
                             json.pathDelimiter))[json.checkChannelIdIndex]);
                 }
