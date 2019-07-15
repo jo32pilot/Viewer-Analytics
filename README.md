@@ -15,7 +15,7 @@ Viewer Analytics is a Twitch panel extension that displays viewer watch habits.\
 # Testing Locally
 If you want to test the server locally, you're going to need an SSL certificate 
 for HTTPS capabilities. I used Let's Encrypt.\
-The steps are as follows:\
+The steps are as follows:
 1. Be sure you have the dependencies installed.
 2. In the Viewer-Analytics folder, create a directory called **conf**.
 3. Store your **private key** and **certificate chain** (if you're using Let's

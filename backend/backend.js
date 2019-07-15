@@ -24,6 +24,7 @@ const JSON_PATH = "./config.json";
 const json = require(JSON_PATH);
 const jwt = jsrsasign.KJUR.jws.JWS;
 const TimeTracker = time.TimeTracker;
+const _MS_PER_DAY = 1000 * 60 * 60 * 24;
 
 
 // Session TimeTrackers for non-whitelisted viewers.
@@ -71,7 +72,6 @@ _assertInitSQLErr(sql.createStreamerList());
 getBearerToken();
 _assertInitSQLErr(sql.fetchStreamerList(sql.fetchTables, trackers, 
         whitelisted));
-_assertInitSQLErr(sql.fetchStreamerList(multiStreamWebhook));
 
 // Cron schedule to update SQL days table for graph
 schedule.scheduleJob(json.cronSettings, updateDays);
@@ -574,7 +574,11 @@ const server = https.createServer(options, function(req, res){
 
             // Token will always be at the end of the query string.
             token = token["hub.challenge"];
-            res.writeHead(json.success, token);
+            res.writeHead(json.success, {
+                "Content-Type": "text/plain"
+            });
+            res.write(token);
+
             res.end();
         }
 
@@ -628,11 +632,10 @@ const server = https.createServer(options, function(req, res){
                 if(data != undefined){
                    
                     // Check if new session started.
-                    if(data["started_at"] != 
-                            isOnline[urlSplit[json.pathChannelIdIndex]]){
+                    if(data["started_at"] != isOnline[channelId]){
 
                         // Settup for new session.
-                        isOnline[urlSplit[json.pathChannelIdIndex]] = 
+                        isOnline[channelId] = 
                                 data["started_at"];
                         for(let user in trackers[channelId]){
                             trackers[channelId][user] = undefined;
@@ -793,6 +796,83 @@ function multiStreamWebhook(broadcasterIds){
 }
 
 /**
+ * Checks if webhook subscriptions need to be renewed. To be called every time 
+ * the access token is renewed (daily). If in the off chance that the server is
+ * down for an extended period of time (more than a day), a manual inspection
+ * of subscriptions is required.
+ */
+function checkWebhooks(){
+    
+    const reqOptions = {
+        "host": json.apiURL,
+        "path": json.getWebhooksPath,
+        "method": "GET",
+        "headers": {
+            "Authorization": "Bearer " + accessToken,
+        },
+    };
+
+    const req = https.request(reqOptions, function(res){
+
+        let data = "";
+        res.on("data", function(chunk){
+
+            data += chunk;
+
+            // Either something went wrong or someone is attempting
+            // to overflow the server.
+            if(data.length > 1e6){
+                logger.fatal(`Overflow attempt - checkWebhooks: `
+                        + `ORIGIN: ${req["Origin"]}`);
+                request.connection.destroy();
+            }
+
+        });
+
+        res.on("end", function(){
+        
+            logger.info("GET webhooks request ended.\n"
+                    + `\tStatus code: ${res.statusCode}\n`
+                    + `\tMessage: ${res.statusMessage}`);
+
+            data = JSON.parse(data)["data"];
+           
+            // Channels for which the webhooks need to be renewed.
+            let toRenew = [];
+
+            let date = new Date();
+            for(let webhook of data){
+
+                // Parse for date of expiration.
+                let dateSplit = webhook["expires_at"].split(json.dateDelimiter);
+                let exYear = parseInt(dateSplit[0]);
+                let exMonth = parseInt(dateSplit[1]);
+                let exDate = parseInt((dateSplit[json.dateIndex].
+                        split(json.timeDelimiter))[0]);
+                let expires = new Date(exYear, exMonth - 1, exDate);
+
+                // If date difference is past a threshold, must renew.
+                if(dateDifference(date, expires) =< json.renewalDays){
+                    toRenew.push((webhook["callback"].split(
+                            json.pathDelimiter))[json.checkChannelIdIndex]);
+                }
+            }
+
+            multiStreamWebhook(toRenew);
+            logger.info(`Renewed webhooks for ${toRenew}`);
+            
+        });
+
+    });
+
+    req.on("error", function(err){
+        logger.error(`Failed attempt - checkWebhooks: ${err}`);
+    });
+
+    req.end();
+}
+
+/**
  * Retrieves a bearer token from Twitch for authentication. This allows for
  * more API calls.
  */
@@ -835,6 +915,7 @@ function getBearerToken(){
                         + `${data["status"]}: ${data["message"]}`);
             }
             accessToken = data["access_token"];
+            checkWebhooks();
         });
 
     });
@@ -844,6 +925,21 @@ function getBearerToken(){
     });
 
     req.end();
+}
+
+/**
+ * Get the difference between two dates.
+ * @param {!Date} date1 Date object.
+ * @param {!Date} date2 Another date object.
+ * @return the number of days between both dates rounded down.
+ */
+function dateDifference(date1, date2){
+    const utc1 = Date.UTC(date1.getFullYear(), date1.getMonth(), 
+            date1.getDate());
+    const utc2 = Date.UTC(date2.getFullYear(), date2.getMonth(), 
+            date2.getDate());
+
+    return Math.floor((utc2 - utc1) / _MS_PER_DAY);
 }
 
 /**
