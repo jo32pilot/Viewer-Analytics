@@ -1,6 +1,6 @@
 # Viewer Analytics
-Viewer Analytics is a Twitch panel extension that displays viewer watch habits.
-![](assets/staticBoard)
+Viewer Analytics is a Twitch panel extension that displays viewer watch habits.\
+![](assets/staticBoard.png)\
 
 ## Capabilities
 - Places viewers on a leaderboard based on time spent watching the streamer.
@@ -14,13 +14,13 @@ Viewer Analytics is a Twitch panel extension that displays viewer watch habits.
 
 # Testing Locally
 If you want to test the server locally, you're going to need an SSL certificate 
-for HTTPS capabilities. I used Let's Encrypt.\ 
+for HTTPS capabilities. I used Let's Encrypt.\
 The steps are as follows:\
-0. Be sure you have the dependencies installed.
-1. In the Viewer-Analytics folder, create a directory called **conf**.
-2. Store your **private key** and **certificate chain** (if you're using Let's
+1. Be sure you have the dependencies installed.
+2. In the Viewer-Analytics folder, create a directory called **conf**.
+3. Store your **private key** and **certificate chain** (if you're using Let's
    Encrypt, privkey.pem and fulllchain.pem) in **Viewer-Analytics/conf**.
-3. Change directories to **Viewer-Analytics/backend**.
-4. Use the provided **config-example.json** as a reference to create your own
+4. Change directories to **Viewer-Analytics/backend**.
+5. Use the provided **config-example.json** as a reference to create your own
    **config.json** file.
-5. Run `node backend.js`
+6. Run `node backend.js`
