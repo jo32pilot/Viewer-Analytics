@@ -68,6 +68,13 @@ const SECONDS = 60;
 const MINUTES = 60;
 
 /**
+ * How often to check for context's first call before calling making
+ * the initBoard request in milliseconds.
+ * @const
+ */
+const ON_CONTEXT_WAIT = 1000;
+
+/**
  * Number to increase how many people should appear on the leaderboard.
  * @const
  */
@@ -142,10 +149,10 @@ let savedBoard = undefined;         // HTML to save the board so
 
 let recentText = undefined;         // Recently submitted text.
 
-let paused = true;                  // Whether or not user is paused.
-
 let displaying = false;             // Whether or not search results are being
                                     // displayed.
+                                    
+let paused = false;                 // Whether or not the user is paused.
 
 let period = "session";             // Which period of time the user is looking
                                     // at
@@ -167,34 +174,52 @@ window.Twitch.ext.onAuthorized(function(auth){
    
     authorization = auth;
 
-    _createRequest(INITIAL_BOARD, initBoard, {
-        "paused": paused
-    });
+    // We need on context to be called before onAuthorized.
+    if(paused == undefined){
+        let waitForContext = setInterval(function(){
+            if(paused != undefined){
+
+                _createRequest(INITIAL_BOARD, initBoard, {
+                    "paused": paused,
+                });
+            
+                clearInterval(waitForContext);
+            }
+
+        }, ON_CONTEXT_WAIT);
+    }
+    else{
+        _createRequest(INITIAL_BOARD, initBoard, {
+            "paused": paused,
+        });
+    }
 
 });
 
 // Define onContext event
 window.Twitch.ext.onContext(function(cxt, changeArr){
-  
-    // If user is not paused, unpause tracker on the server.
-    if(paused && cxt["isPaused"] == false && name != ""){
-        _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
-            "paused": false,
-            "viewerqueriedfor": name
-        });
-        paused = false;
-    }
-
-    // If user is paused, pause tracker on the server.
-    else if(!paused && cxt["isPaused"] == true && name != ""){
-        _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
-            "paused": true,
-            "viewerqueriedfor": name
-        });
-        paused = true;
-    }
-
+ 
     paused = cxt["isPaused"];
+
+    if(changeArr.includes("isPaused")){
+
+        // If user is not paused, unpause tracker on the server.
+        if(cxt["isPaused"] == false && name != ""){
+            _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
+                "paused": false,
+                "viewerqueriedfor": name
+            });
+        }
+
+        // If user is paused, pause tracker on the server.
+        else if(cxt["isPaused"] == true && name != ""){
+            _createRequest(TOGGLE_TRACKER, undefined, additionalArgs={
+                "paused": true,
+                "viewerqueriedfor": name
+            });
+        }
+    }
+
 
     // Toggle dark and light css themes.
     if(cxt["theme"] == "light"){

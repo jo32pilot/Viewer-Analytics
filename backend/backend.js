@@ -435,10 +435,10 @@ const server = https.createServer(options, function(req, res){
 
             // This is super slow. Like, m*n slow where m is the length
             // of the names and n is the amount of names. Don't know that
-            // time complexity of includes though. There's probably a better
-            // way the search for matching names.
+            // time complexity of startsWith though. May implement a ternary
+            // search tree in later iterations.
             for(let viewer in trackers[channelId]){
-                if(viewer.includes(req.headers["viewerqueriedfor"])){
+                if(viewer.startsWith(req.headers["viewerqueriedfor"])){
                     let viewVal = trackers[channelId][viewer];
                     if(viewVal != undefined){
 
