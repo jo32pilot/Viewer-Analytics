@@ -370,7 +370,7 @@ function initBoard(res, status=undefined, jqXHR=undefined){
             id: "id_off"
         });
         const text = "<p>If you want to see yourself on this board, "
-                    + "enable ID sharing! ID sharing just allows the extension" 
+                    + "enable ID sharing! ID sharing just allows the extension "
                     + "to see your display name. To enable ID sharing, click on"
                     + " the person icon at the bottom of this extension, then "
                     + "click \"Grant\".<br><br>Note: "
