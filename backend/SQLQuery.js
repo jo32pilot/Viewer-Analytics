@@ -610,7 +610,7 @@ function updateGraphTable(channelId, times){
             `${today.getMonth() + 1}/${today.getDate()}/`
             + `${today.getFullYear()}`);
 
-    let channelId = sql.raw(channelId + _GRAPH_SUFFIX);
+    channelId = sql.raw(channelId + _GRAPH_SUFFIX);
 
     pool.getConnection(function(err, connection){
 

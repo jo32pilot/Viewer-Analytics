@@ -675,6 +675,13 @@ function _createRequest(path, callback, additionalArgs={}){
         url: SERVER_DOMAIN + path,
         type: "GET",
         headers: reqHeaders,
+        error: function(jqXHR){
+            if(jqXHR["status"] == 0){
+                $("#leaderboard").html("<p>Server is possibly down.<br>"
+                        + "Please report "
+                        + "this to 166john@gmail.com<br> Thank you!</p>");
+            }
+        }
     };
 
     // If callback exists, attach it.
