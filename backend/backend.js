@@ -355,7 +355,7 @@ const server = https.createServer(options, function(req, res){
             // Someone other than the broadcaster attempted to make this
             // request.
             else{
-                res.writeHead(json.forbidden);
+                res.writeHead(json.forbidden, headers);
                 res.end();
                 logger.warn(`Illegal attempt: Not Broadcaster - `
                         + `toggleWhitelist: ${req["headers"]}`);
@@ -365,7 +365,7 @@ const server = https.createServer(options, function(req, res){
         // Either someone other than the broadcaster attempted to make this
         // request, or something went wrong.
         else{
-            res.writeHead(json.forbidden);
+            res.writeHead(json.forbidden, headers);
             res.end();
             logger.warn(`Illegal attempt JWT Invalid - toggleWhitelist: `
                     + `${req["headers"]}`);
@@ -412,7 +412,7 @@ const server = https.createServer(options, function(req, res){
         // Request was not made with a JWT signed by Twitch or something like
         // that. Probably.
         else{
-            res.writeHead(json.forbidden);
+            res.writeHead(json.forbidden, headers);
             res.end();
             loggger.info(`Illegal attempt - fetchLongStats: `
                     + `${req["headers"]}`);
@@ -470,7 +470,7 @@ const server = https.createServer(options, function(req, res){
             res.end(JSON.stringify(responsePayload));
         }
         else{
-            res.writeHead(json.forbidden);
+            res.writeHead(json.forbidden, headers);
             res.end();
             logger.info(`Illegal attempt: JWT Invalid - userSearch: `
                     + `${req["headers"]}`);
@@ -487,13 +487,25 @@ const server = https.createServer(options, function(req, res){
             const viewer = req.headers["viewerqueriedfor"];
             const channelId = requestPayload["channel_id"];
             let isWhitelisted = false;
+            
+            if(requestPayload["role"] == "broadcaster"){
+                res.writeHead(json.success, headers);
+                res.end();
+                return;
+            }
+            else if(trackers[channelId] == undefined || viewer == undefined){
+                res.writeHead(json.notFound, headers);
+                res.end();
+                logger.info(`User not found - toggleTracker: ${channelId}`);
+                return;
+            }
 
             // Check if request from actualy from the client that's being 
             // paused.
             if(trackers[channelId][viewer] != undefined){
                 if(requestPayload["user_id"] != 
                         trackers[channelId][viewer].user){
-                    res.writeHead(json.forbidden);
+                    res.writeHead(json.forbidden, headers);
                     res.end();
                     logger.info(`Illegal attempt: User ID does not match - `
                             + `toggleTracker: ${req["headers"]}`);
@@ -504,7 +516,7 @@ const server = https.createServer(options, function(req, res){
             else if(whitelisted[channelId][viewer] != undefined){
                 if(requestPayload["user_id"] != 
                         whitelisted[channelId][viewer].user){
-                    res.writeHead(json.forbidden);
+                    res.writeHead(json.forbidden, headers);
                     res.end();
                     logger.info(`Illegal attempt: User ID does not match - `
                             + `toggleTracker: ${req["headers"]}`);
@@ -515,7 +527,7 @@ const server = https.createServer(options, function(req, res){
 
             // User doesn't exist
             else{
-                res.writeHead(json.notFound);
+                res.writeHead(json.notFound, headers);
                 res.end();
                 return;
             }
@@ -549,7 +561,7 @@ const server = https.createServer(options, function(req, res){
             res.end();
         }
         else{
-            res.writeHead(json.forbidden);
+            res.writeHead(json.forbidden, headers);
             res.end();
             logger.info(`Illegal attempt: JWT Invalid - toggleTracker: `
                     + `${req["headers"]}`);
@@ -915,6 +927,7 @@ function getBearerToken(){
                         + `${data["status"]}: ${data["message"]}`);
             }
             accessToken = data["access_token"];
+            logger.info(`Access Token: ${accessToken}`);
             checkWebhooks();
         });
 
@@ -984,7 +997,7 @@ function _checkJWT(req, res){
             !jwt.verifyJWT(req.headers["extension-jwt"],
             {"b64": json.secret}, {alg: [json.alg]})){
             
-        res.writeHead(json.forbidden);
+        res.writeHead(json.forbidden, headers);
         res.end();
         return false;
     }
