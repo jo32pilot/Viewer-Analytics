@@ -318,6 +318,12 @@ const server = https.createServer(options, function(req, res){
 
                 const channelId = requestPayload["channel_id"];
                 const viewer = req.headers["viewerqueriedfor"];
+                if(viewer == undefined){
+                    res.writeHead(json.badRequest, headers);
+                    res.end();
+                    return;
+                }
+
                 let response = undefined;
                 let isWhitelisted = 
                         whitelisted[channelId].hasOwnProperty(viewer);
@@ -381,6 +387,12 @@ const server = https.createServer(options, function(req, res){
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
             const viewerQueriedFor = req.headers["viewerqueriedfor"];
+            if(viewerQueriedFor == undefined){
+                res.writeHead(json.badRequest, headers);
+                res.end();
+                return;
+            }
+
             const channelId = requestPayload["channel_id"];
             let isWhitelisted = undefined;
 
@@ -424,6 +436,12 @@ const server = https.createServer(options, function(req, res){
 
         if(_checkJWT(req, res)){
 
+            if(req.headers["viewerqueriedfor"] == undefined){
+                res.writeHead(json.badRequest, headers);
+                res.end();
+                return;
+            }
+
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
 
@@ -452,7 +470,7 @@ const server = https.createServer(options, function(req, res){
                 }
             }
             for(let viewer in whitelisted[channelId]){
-                if(viewer.includes(req.headers["viewerqueriedfor"])){
+                if(viewer.startsWith(req.headers["viewerqueriedfor"])){
                     let viewVal = whitelisted[channelId][viewer];
                     if(viewVal != undefined){
 
@@ -496,7 +514,6 @@ const server = https.createServer(options, function(req, res){
             else if(trackers[channelId] == undefined || viewer == undefined){
                 res.writeHead(json.notFound, headers);
                 res.end();
-                logger.info(`User not found - toggleTracker: ${channelId}`);
                 return;
             }
 
@@ -625,6 +642,9 @@ const server = https.createServer(options, function(req, res){
         req.on("end", function(){
 
             // Verify that request is from twitch webhook subscription
+            if(req.headers["x-hub-signature"] == undefined){
+                return;
+            }
             const incoming = req.headers["x-hub-signature"].
                     split(json.verificationDelimiter);
 

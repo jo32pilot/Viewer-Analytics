@@ -619,7 +619,7 @@ function updateGraphTable(channelId, times){
             return;
         }
 
-        pool.query("ALTER TABLE ? ADD `?` INT NOT NULL DEFAULT 0;",
+        pool.query("ALTER TABLE ? ADD \`?\` INT NOT NULL DEFAULT 0;",
                 [channelId, today], function(error){
          
            if( _assertError(error, connection)){
