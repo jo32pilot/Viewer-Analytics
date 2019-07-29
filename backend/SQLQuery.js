@@ -50,6 +50,18 @@ const _WHITELIST_SUFFIX = "WS";
  */
 const _GRAPH_SUFFIX = "G";
 
+/** 
+ * Minutes in an hour.
+ * @const
+ */
+const MINUTES = 60;
+
+/**
+ * Seconds in a minute.
+ * @const
+ */
+const SECONDS = 60;
+
 
 // Set up logging
 log4js.configure({
@@ -220,6 +232,10 @@ function fetchLongTable(channelId, viewerUsername, isWhitelisted, res){
                 return;
             }
 
+            for(data in results[0]){
+                results[0][data] = Math.floor(results[0][data]
+                        / MINUTES / SECONDS);
+            }
             responsePayload["longStats"] = results;
 
         });
@@ -632,7 +648,7 @@ function updateGraphTable(channelId, times){
         // On the same connection, update each person's time.
         for(let viewer in times){
 
-            pool.query("UPDATE ? SET ?=? WHERE username=?;", 
+            pool.query("UPDATE ? SET `?`=? WHERE username=?;", 
                     [channelId, today, times[viewer], viewer], function(error){
              
                 if(_assertError(error, connection)){
