@@ -147,7 +147,7 @@ function fetchTables(streams, regular, whitelisted){
                     [sql.raw(stream + _REGULAR_SUFFIX)], 
                     function(error, results, fields){
                 
-                if(_assertError(error, connection)){
+                if(toReturn || _assertError(error, connection)){
                     toReturn = true;
                     return;
                 }
@@ -167,7 +167,7 @@ function fetchTables(streams, regular, whitelisted){
                     [sql.raw(stream + _WHITELIST_SUFFIX)],
                     function(error, results, fields){
 
-                if(_assertError(error, connection)){
+                if(toReturn || _assertError(error, connection)){
                     toReturn = true;
                     return;
                 }
@@ -182,7 +182,9 @@ function fetchTables(streams, regular, whitelisted){
             });
         }
 
-        connection.release();
+        if(!toReturn){
+            connection.release();
+        }
 
     });
 
@@ -227,7 +229,7 @@ function fetchLongTable(channelId, viewerUsername, isWhitelisted, res){
                 + "WHERE username=?;", 
                 [table, viewerUsername], function(error, results, fields){
     
-            if(_assertError(error, connection, res)){
+            if(toReturn || _assertError(error, connection, res)){
                 toReturn = true;
                 return;
             }
@@ -244,7 +246,7 @@ function fetchLongTable(channelId, viewerUsername, isWhitelisted, res){
         connection.query("SELECT * FROM ? WHERE username=?;", 
                 [graphTable, viewerUsername], function(error, results, fields){
 
-            if(_assertError(error, connection, res)){
+            if(toReturn || _assertError(error, connection, res)){
                 toReturn = true;
                 return;
             }
@@ -257,7 +259,9 @@ function fetchLongTable(channelId, viewerUsername, isWhitelisted, res){
 
         });
 
-        connection.release();
+        if(!toReturn){
+            connection.release();
+        }
     });
 
     return toReturn;
@@ -330,7 +334,7 @@ function addStreamerTable(channelId){
                 + "all_time INT DEFAULT 0, PRIMARY KEY(id));",
                 [channelIdRegular], function(error){
 
-            if(_assertError(error, connection)){
+            if(toReturn || _assertError(error, connection)){
                 toReturn = true;
                 return;
             }
@@ -345,14 +349,16 @@ function addStreamerTable(channelId){
                 + "all_time INT DEFAULT 0, PRIMARY KEY(id));",
                 [whitelistId], function(error){
            
-            if(_assertError(error, connection)){
+            if(toReturn || _assertError(error, connection)){
                 toReturn = true;
                 return;
             }
 
         });
-
-        connection.release();
+        
+        if(!toReturn){
+            connection.relase();
+        }
 
     });
 
@@ -444,7 +450,7 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
         connection.query("SELECT * FROM ? WHERE username=?;",
                 [removeFrom, viewerUsername], function(error, results, fields){
            
-            if(_assertError(error, connection)){
+            if(toReturn || _assertError(error, connection)){
                toReturn = true;
                return;
             }
@@ -463,7 +469,7 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
                     [insertInto, viewerId, viewerUsername, times], 
                     function(error){
 
-                if(_assertError(error, connection)){
+                if(toReturn || _assertError(error, connection)){
                     toReturn = true;
                     return;
                 }
@@ -474,14 +480,15 @@ function swapViewer(channelId, viewerUsername, whitelisted=false){
         connection.query("DELETE FROM ? WHERE username=?;", 
                 [removeFrom, viewerUsername], function(error){
         
-            if(_assertError(error, connection)){
+            if(toReturn || _assertError(error, connection)){
                 toReturn = true;
                 return;
             }
         });
 
-
-        connection.release();
+        if(!toReturn){
+            connection.release();
+        }
     });
 
     return toReturn;
@@ -638,30 +645,34 @@ function updateGraphTable(channelId, times){
         pool.query("ALTER TABLE ? ADD \`?\` INT NOT NULL DEFAULT 0;",
                 [channelId, today], function(error){
          
-           if( _assertError(error, connection)){
+           if(toReturn || _assertError(error, connection)){
                 toReturn = true;
                 return;
            }
 
+           // On the same connection, update each person's time.
+           for(let viewer in times){
+
+               pool.query("UPDATE ? SET \`?\`=? WHERE username=?;", 
+                       [channelId, today, times[viewer], 
+                       viewer], function(error){
+                 
+                   if(toReturn || _assertError(error, connection)){
+                       toReturn = true;
+                       return;
+                   }
+
+                   times[viewer] = 0;
+
+               });
+           }
+
         });
     
-        // On the same connection, update each person's time.
-        for(let viewer in times){
 
-            pool.query("UPDATE ? SET `?`=? WHERE username=?;", 
-                    [channelId, today, times[viewer], viewer], function(error){
-             
-                if(_assertError(error, connection)){
-                    toReturn = true;
-                    return;
-                }
-
-                times[viewer] = 0;
-
-            });
+        if(!toReturn){
+            connection.release();
         }
-
-        connection.release();
 
     });
 
@@ -704,6 +715,8 @@ function addViewerGraphTable(channelId, viewerId, viewerUsername){
  */
 function clearWeek(){
 
+    let errorExists = false;
+
     pool.getConnection(function(err, connection){
 
         if(_assertConnectionError(err)){
@@ -715,7 +728,8 @@ function clearWeek(){
         connection.query("SELECT * FROM list_of_streamers;",
                 function(error, results, fields){
 
-            if(_assertError(error)){
+            if(errorExists || _assertError(error, connection)){
+                errorExists = true;
                 return;
             }
 
@@ -728,16 +742,20 @@ function clearWeek(){
 
         });
 
-        connection.query("UPDATE ?, ? SET week=0;", 
-                [streamersReg, streamersWhitelist], function(error){
+        connection.query("UPDATE ?, ? SET ?.week=0, ?.week=0;", 
+                [streamersReg, streamersWhitelist, 
+                streamersReg, streamersWhitelist], function(error){
                 
-            if(_assertError(error)){
+            if(errorExists || _assertError(error)){
+                errorExists = true;
                 return;
             }
 
         });
 
-        connection.release();
+        if(!errorExists){
+            connection.release();
+        }
 
     });
 
@@ -749,6 +767,8 @@ function clearWeek(){
  */
 function clearMonth(){
 
+    let errorExists = false;
+
     pool.getConnection(function(err, connection){
 
         if(_assertConnectionError(err)){
@@ -760,7 +780,8 @@ function clearMonth(){
         connection.query("SELECT * FROM list_of_streamers;",
                 function(error, results, fields){
 
-            if(_assertError(error)){
+            if(errorExists || _assertError(error, connection)){
+                errorExists = true;
                 return;
             }
 
@@ -773,16 +794,20 @@ function clearMonth(){
 
         });
 
-        connection.query("UPDATE ?, ? SET month=0;", 
-                [streamersReg, streamersWhitelist], function(error){
+        connection.query("UPDATE ?, ? SET ?.month=0, ?.month=0;", 
+                [streamersReg, streamersWhitelist, streamersReg, 
+                streamersWhitelist], function(error){
                 
-            if(_assertError(error)){
+            if(errorExists || _assertError(error)){
+                errorExists = true;
                 return;
             }
 
         });
 
-        connection.release();
+        if(!errorExists){
+            connection.release();
+        }
 
     });
 }
@@ -843,7 +868,7 @@ function updateTime(regular, whitelisted){
                 
                 connection.query(query, queryArgs, function(error){
                  
-                    if(_assertError(err, connection)){
+                    if(toReturn || _assertError(err, connection)){
                         toReturn = true;
                         return;
                     }
@@ -864,7 +889,7 @@ function updateTime(regular, whitelisted){
 
                 connection.query(query, queryArgs, function(error){
 
-                    if(_assertError(error, connection)){
+                    if(toReturn || _assertError(error, connection)){
                         toReturn = true;
                         return;
                     }
@@ -873,7 +898,9 @@ function updateTime(regular, whitelisted){
             }
         }
 
-        connection.release();
+        if(!toReturn){
+            connection.release();
+        }
 
     });
 
