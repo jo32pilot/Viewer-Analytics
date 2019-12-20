@@ -180,7 +180,7 @@ const server = https.createServer(options, function(req, res){
                         if(response != undefined){
                             response = response[0];
                             const displayName = response["display_name"];
-                            res.setHeader("name", displayName);
+                            res.setHeader("name", encodeURIComponent(displayName));
                         }
 
                         // Then we end and return because we don't want the 
@@ -202,7 +202,9 @@ const server = https.createServer(options, function(req, res){
 
                     // If viewer can't be found in the channel's trackers, add
                     // them to it and the SQL tables.
-                    if(!trackers[channelId].hasOwnProperty(displayName) && 
+                    if(trackers.hasOwnProperty(channelId) && 
+                            whitelisted.hasOwnProperty(channelId) &&
+                            !trackers[channelId].hasOwnProperty(displayName) && 
                             !whitelisted[channelId].hasOwnProperty(displayName)){
                         sql.addViewer(channelId, response["id"], displayName);
                         sql.addViewerGraphTable(channelId, response["id"], 
@@ -502,7 +504,7 @@ const server = https.createServer(options, function(req, res){
 
             const requestPayload = jwt.parse(req.headers["extension-jwt"]).
                     payloadObj;
-            const viewer = req.headers["viewerqueriedfor"];
+            const viewer = decodeURIComponent(req.headers["viewerqueriedfor"]);
             const channelId = requestPayload["channel_id"];
             let isWhitelisted = false;
             
@@ -519,7 +521,8 @@ const server = https.createServer(options, function(req, res){
 
             // Check if request from actualy from the client that's being 
             // paused.
-            if(trackers[channelId][viewer] != undefined){
+            if(trackers[channelId] != undefined 
+                    && trackers[channelId][viewer] != undefined){
                 if(requestPayload["user_id"] != 
                         trackers[channelId][viewer].user){
                     res.writeHead(json.forbidden, headers);
@@ -530,7 +533,8 @@ const server = https.createServer(options, function(req, res){
                 }
             }
 
-            else if(whitelisted[channelId][viewer] != undefined){
+            else if(whitelisted[channelId] != undefined 
+                    && whitelisted[channelId][viewer] != undefined){
                 if(requestPayload["user_id"] != 
                         whitelisted[channelId][viewer].user){
                     res.writeHead(json.forbidden, headers);
@@ -1017,7 +1021,7 @@ function _checkJWT(req, res){
             !jwt.verifyJWT(req.headers["extension-jwt"],
             {"b64": json.secret}, {alg: [json.alg]})){
             
-        res.writeHead(json.forbidden, headers);
+        res.writeHead(json.forbidden, json.headers);
         res.end();
         return false;
     }

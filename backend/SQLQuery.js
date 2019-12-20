@@ -357,7 +357,7 @@ function addStreamerTable(channelId){
         });
         
         if(!toReturn){
-            connection.relase();
+            connection.release();
         }
 
     });
@@ -642,7 +642,7 @@ function updateGraphTable(channelId, times){
             return;
         }
 
-        pool.query("ALTER TABLE ? ADD \`?\` INT NOT NULL DEFAULT 0;",
+        connection.query("ALTER TABLE ? ADD \`?\` INT NOT NULL DEFAULT 0;",
                 [channelId, today], function(error){
          
            if(toReturn || _assertError(error, connection)){
@@ -653,7 +653,7 @@ function updateGraphTable(channelId, times){
            // On the same connection, update each person's time.
            for(let viewer in times){
 
-               pool.query("UPDATE ? SET \`?\`=? WHERE username=?;", 
+               connection.query("UPDATE ? SET \`?\`=? WHERE username=?;", 
                        [channelId, today, times[viewer], 
                        viewer], function(error){
                  
@@ -965,6 +965,7 @@ function _assertError(err, connection, res=undefined){
             connection.release();
         }
         catch(error){
+            logger.error("Connection already released.")
         }
         if(res != undefined){
             res.writeHead(json.badRequest);

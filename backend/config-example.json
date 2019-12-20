@@ -38,6 +38,7 @@
     "webhookPath": "/helix/webhooks/hub",
     "getWebhooksPath": "/helix/webhooks/subscriptions",
     "tokenPath": "/oauth2/token",
+    "tokenRefreshPath": "/oauth2/token--data-urlencode",
 
     "alg": "YOUR_PREFERRED_ENCRYPTION_ALGORITHM_HERE",
 
